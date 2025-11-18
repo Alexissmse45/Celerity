@@ -35,11 +35,11 @@ class Lexer:
         self.delimop = {'+', '-', '*', '/', '%', '!', '&', '|', '<', '>', '=', ' '}
         self.escapeseq = {'\n', '\t'}
 
-        ascii_chars = set("!@#$%^&*()-_=+[{]}\\|;:,<.>/?`~") | self.alphalow | self.alphaup | self.digit
-
-        self.asciiword = ascii_chars - {'"'}   # string: everything except double quote
-        self.asciisingle = ascii_chars - {"'"} # char: everything except single quote
-        self.asciicom = (ascii_chars | self.whitespace) - {'#', '*'}
+        self.asciicom = {chr(i) for i in range(32, 127) if chr(i) not in {'#', '*'}}
+        self.ascii= {chr(i) for i in range(32, 127) if chr(i)}
+        self.asciiword = {chr(i) for i in range(32, 127) if chr(i) != '"'}   # string: everything except double quote
+        self.asciisingle = {chr(i) for i in range(32, 127) if chr(i) not in {'#', "'"}} # char: everything except single quote
+        
         self.delimword = {')', '}', '+'} | self.comma | self.semicolon | self.space | self.colon
         self.delimsingle = {'}', ')'} | self.comma | self.semicolon | self.space | self.colon
         self.delimdigit = {'}', ')', ']'} | self.space | self.delimop | self.semicolon | self.colon | self.comma | self.period
@@ -66,12 +66,11 @@ class Lexer:
         self.delim16 = self.asciisingle | self.escapeseq | self.space
         self.delim17 = self.asciisingle | self.escapeseq | self.space
         
-        
       
     def fetch_next_char(self):
         if self.position < len(self.source_code):
             char = self.source_code[self.position]
-            #print(f"Fetching char at pos {self.position}: {repr(char)}")  # debug print
+            print(f"Fetching char at pos {self.position}: {repr(char)}")  # debug print
             self.position += 1
             return char
 
@@ -101,18 +100,13 @@ class Lexer:
             char = self.fetch_next_char() 
             column += 1 
 
-            if char is None:
-                # finalize token if needed before breaking
-                if lexeme:
-                    tokens.append((lexeme, "unknown", line, column))
+            if char is None and state == 0:
                 break
-
+            
 
             match state: 
                 case 0: 
-
                     lexeme = "" 
-
                     #spaces 
                     if char in self.whitespace: 
                         if char == '\n': 
@@ -126,46 +120,46 @@ class Lexer:
                         lexeme += char
                     elif char == 'c':
                         state = 6
-                        lexeme += char
+                        lexeme += 'c'
                     elif char == 'd':
                         state = 12
-                        lexeme += char
+                        lexeme += 'd'
                     elif char == 'e':
                         state = 21
-                        lexeme += char
+                        lexeme += 'e'
                     elif char == 'f':
                         state = 29
-                        lexeme += char
+                        lexeme += 'f'
                     elif char == 'i':
                         state = 46
-                        lexeme += char
+                        lexeme += 'i'
                     elif char == 'm':
                         state = 57
-                        lexeme += char
+                        lexeme += 'm'
                     elif char == 'n':
                         state = 66
-                        lexeme += char
+                        lexeme += 'n'
                     elif char == 'o':
                         state = 70
-                        lexeme += char
+                        lexeme += 'o'
                     elif char == 'p':
                         state = 74
-                        lexeme += char
+                        lexeme += 'p'
                     elif char == 'r':
                         state = 79
-                        lexeme += char
+                        lexeme += 'r'
                     elif char == 's':
                         state = 91
-                        lexeme += char
+                        lexeme += 's'
                     elif char == 't':
                         state = 109
-                        lexeme += char
+                        lexeme += 't'
                     elif char == 'v':
                         state = 114
-                        lexeme += char
+                        lexeme += 'v'
                     elif char == 'w':
                         state = 121
-                        lexeme += char
+                        lexeme += 'w'
 
                      # operators / punctuators | Reserved Symbols 
                     elif char == '+':
@@ -252,7 +246,7 @@ class Lexer:
                         state = 203
                         lexeme += char
 
-                    elif char in self.digit and char != '0':
+                    elif char.isdigit() and char != '0':
                         state = 206
                         lexeme += char
 
@@ -265,12 +259,12 @@ class Lexer:
                         state = 243
                         lexeme += "'"
                     #word literals
-                    elif char == "'":
+                    elif char == '"':
                         state = 247
-                        lexeme += "'"
+                        lexeme += '"'
                     
-                    elif char in self.alphabet:
-                        state = 251
+                    elif char.isalpha():
+                        state = 250
                         lexeme += char
                     
                     #error handling 
@@ -283,18 +277,17 @@ class Lexer:
                     if char == 'o': 
                         state = 2
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
                             column -= 1
                             if char is None:
-
                                 self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Missing Delimiter.")
                             else:
                                 self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Invalid Delimiter ( {repr(char)} ).")
@@ -307,18 +300,17 @@ class Lexer:
                     if char == 'o': 
                         state = 3
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
                             column -= 1
                             if char is None:
-
                                 self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Missing Delimiter.")
                             else:
                                 self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Invalid Delimiter ( {repr(char)} ).")
@@ -331,18 +323,17 @@ class Lexer:
                     if char == 'l': 
                         state = 4
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
                             column -= 1
                             if char is None:
-
                                 self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Missing Delimiter.")
                             else:
                                 self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Invalid Delimiter ( {repr(char)} ).")
@@ -357,8 +348,8 @@ class Lexer:
                         state = 5
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -382,12 +373,12 @@ class Lexer:
                     if char == 'o': 
                         state = 7
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -407,12 +398,12 @@ class Lexer:
                     if char == 'n': 
                         state = 8
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -432,12 +423,12 @@ class Lexer:
                     if char == 's': 
                         state = 9
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -457,12 +448,12 @@ class Lexer:
                     if char == 't': 
                         state = 10
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -483,8 +474,8 @@ class Lexer:
                         state = 11
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -511,12 +502,12 @@ class Lexer:
                     elif char == 'o': 
                         state = 19
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -539,12 +530,12 @@ class Lexer:
                     elif char == 'f' : 
                         state = 17
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -562,14 +553,14 @@ class Lexer:
                     
                 case 14:  # 'dec'
                     if char == 'i': 
-                        state = 14
+                        state = 15
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -590,8 +581,8 @@ class Lexer:
                         state = 16
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -617,8 +608,8 @@ class Lexer:
                         state = 18
                         if char is not None:
                             self.step_back()    
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -644,8 +635,8 @@ class Lexer:
                         state = 20
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -670,12 +661,12 @@ class Lexer:
                     if char == 'l': 
                         state = 22
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -695,12 +686,12 @@ class Lexer:
                     if char == 's': 
                         state = 23
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -720,12 +711,12 @@ class Lexer:
                     if char == 'e': 
                         state = 24
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -746,13 +737,13 @@ class Lexer:
                         state = 25
                         if char is not None:
                             self.step_back()
-                    
+
                     elif char == 'i' :  # to handle 'elseif' keyword
                         state = 26
                         lexeme += char
 
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char  
                     else:
                         column -= 1
@@ -777,12 +768,12 @@ class Lexer:
                     if char == 'f': 
                         state = 27
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:   
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -803,8 +794,8 @@ class Lexer:
                         state = 28
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -835,12 +826,12 @@ class Lexer:
                     elif char == 'u': 
                         state = 38
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -860,12 +851,12 @@ class Lexer:
                     if char == 'l':
                         state = 31
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -885,12 +876,12 @@ class Lexer:
                     if char == 's':
                         state = 32
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -910,12 +901,12 @@ class Lexer:
                     if char == 'e':
                         state = 33
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -936,8 +927,8 @@ class Lexer:
                         state = 34
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -962,12 +953,12 @@ class Lexer:
                     if char == 'r': 
                         state = 36
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -988,8 +979,8 @@ class Lexer:
                         state = 37
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1014,12 +1005,12 @@ class Lexer:
                     if char == 'n': 
                         state = 39
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1039,12 +1030,12 @@ class Lexer:
                     if char == 'c': 
                         state = 40
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1064,12 +1055,12 @@ class Lexer:
                     if char == 't': 
                         state = 41
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1089,12 +1080,12 @@ class Lexer:
                     if char == 'i':
                         state = 42
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1114,12 +1105,12 @@ class Lexer:
                     if char == 'o':
                         state = 43
                         lexeme += char 
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1139,12 +1130,12 @@ class Lexer:
                     if char == 'n':
                         state = 44
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1165,8 +1156,8 @@ class Lexer:
                         state = 45
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1200,12 +1191,12 @@ class Lexer:
                         state = 51  # to handle 'is' keyword
                         lexeme += char
 
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1226,8 +1217,8 @@ class Lexer:
                         state = 48
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1253,8 +1244,8 @@ class Lexer:
                         state = 50
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1280,13 +1271,11 @@ class Lexer:
                         state = 52
                         if char is not None:
                             self.step_back()
-
                     elif char == 'n':  # to handle 'isnot' keyword
-                        state = 56
+                        state = 53
                         lexeme += char
-
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1311,12 +1300,12 @@ class Lexer:
                     if char == 'o':
                         state = 54
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1336,12 +1325,12 @@ class Lexer:
                     if char == 't':
                         state = 55
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1359,11 +1348,11 @@ class Lexer:
 
                 case 55:  # 'isnot'
                     if char in self.space or char == '\t':
-                        state = 52
+                        state = 56
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1388,12 +1377,12 @@ class Lexer:
                     if char == 'a':
                         state = 58
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1418,12 +1407,12 @@ class Lexer:
                         state = 62
                         lexeme += char
 
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1443,12 +1432,12 @@ class Lexer:
                     if char == 'n':
                         state = 60
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1469,8 +1458,8 @@ class Lexer:
                         state = 61
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1495,12 +1484,12 @@ class Lexer:
                     if char == 'c':
                         state = 63
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1520,12 +1509,12 @@ class Lexer:
                     if char == 'h':
                         state = 64
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1546,8 +1535,8 @@ class Lexer:
                         state = 65
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1572,12 +1561,12 @@ class Lexer:
                     if char == 'u':
                         state = 67
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1597,12 +1586,12 @@ class Lexer:
                     if char == 'm':
                         state = 68
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1623,8 +1612,8 @@ class Lexer:
                         state = 69
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1649,12 +1638,12 @@ class Lexer:
                     if char == 'u':
                         state = 71
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1674,12 +1663,12 @@ class Lexer:
                     if char == 't':
                         state = 72
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1700,8 +1689,8 @@ class Lexer:
                         state = 73
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1726,12 +1715,12 @@ class Lexer:
                     if char == 'i': 
                         state = 75
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1750,12 +1739,12 @@ class Lexer:
                     if char == 'c': 
                         state = 76
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1774,12 +1763,12 @@ class Lexer:
                     if char == 'k': 
                         state = 77
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1799,8 +1788,8 @@ class Lexer:
                         state = 78
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1824,12 +1813,12 @@ class Lexer:
                     if char == 'e': 
                         state = 80
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1853,12 +1842,12 @@ class Lexer:
                     elif char == 't':
                         state = 86
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1878,12 +1867,12 @@ class Lexer:
                     if char == 'u': 
                         state = 82
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1903,12 +1892,12 @@ class Lexer:
                     if char == 'm': 
                         state = 83
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1928,12 +1917,12 @@ class Lexer:
                     if char == 'e': 
                         state = 84
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -1954,8 +1943,8 @@ class Lexer:
                         state = 85
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -1979,12 +1968,12 @@ class Lexer:
                     if char == 'u': 
                         state = 87
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2004,12 +1993,12 @@ class Lexer:
                     if char == 'r': 
                         state = 88
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2029,12 +2018,12 @@ class Lexer:
                     if char == 'n': 
                         state = 89
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2055,8 +2044,8 @@ class Lexer:
                         state = 90
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2090,12 +2079,12 @@ class Lexer:
                         state = 103
                         lexeme += char
                         
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2115,12 +2104,12 @@ class Lexer:
                     if char == 'n': 
                         state = 93
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2140,12 +2129,12 @@ class Lexer:
                     if char == 'g': 
                         state = 94
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2165,12 +2154,12 @@ class Lexer:
                     if char == 'l': 
                         state = 95
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2190,12 +2179,12 @@ class Lexer:
                     if char == 'e': 
                         state = 96
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2216,8 +2205,8 @@ class Lexer:
                         state = 97
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2231,7 +2220,7 @@ class Lexer:
                                 self.step_back()
                         state = 0
 
-                case 97:# Finalize 'bool' token
+                case 97:# Finalize 'single' token
                     column -= 2
                     tokens.append((lexeme, "single", line, column))
                     if char is not None:
@@ -2242,12 +2231,12 @@ class Lexer:
                     if char == 'l': 
                         state = 99
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2267,12 +2256,12 @@ class Lexer:
                     if char == 'i': 
                         state = 100
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2292,12 +2281,12 @@ class Lexer:
                     if char == 't': 
                         state = 101
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2318,8 +2307,8 @@ class Lexer:
                         state = 102
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2344,12 +2333,12 @@ class Lexer:
                     if char == 'r': 
                         state = 104
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2369,12 +2358,12 @@ class Lexer:
                     if char == 'u': 
                         state = 105
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2394,12 +2383,12 @@ class Lexer:
                     if char == 'c': 
                         state = 106
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2419,12 +2408,12 @@ class Lexer:
                     if char == 't': 
                         state = 107
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2445,8 +2434,8 @@ class Lexer:
                         state = 108
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2471,12 +2460,12 @@ class Lexer:
                     if char == 'r': 
                         state = 110
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2496,12 +2485,12 @@ class Lexer:
                     if char == 'u': 
                         state = 111
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2521,12 +2510,12 @@ class Lexer:
                     if char == 'e': 
                         state = 112
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2547,8 +2536,8 @@ class Lexer:
                         state = 113
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2573,12 +2562,12 @@ class Lexer:
                     if char == 'a': 
                         state = 115
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2598,12 +2587,12 @@ class Lexer:
                     if char == 'c': 
                         state = 116
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2623,12 +2612,12 @@ class Lexer:
                     if char == 'a': 
                         state = 117
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2648,12 +2637,12 @@ class Lexer:
                     if char == 'n': 
                         state = 118
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2673,12 +2662,12 @@ class Lexer:
                     if char == 't': 
                         state = 119
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2699,8 +2688,8 @@ class Lexer:
                         state = 120
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2728,12 +2717,12 @@ class Lexer:
                     elif char == 'o':
                         state = 127
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2752,12 +2741,12 @@ class Lexer:
                     if char == 'i': 
                         state = 123
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2776,12 +2765,12 @@ class Lexer:
                     if char == 'l': 
                         state = 124
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2800,12 +2789,12 @@ class Lexer:
                     if char == 'e': 
                         state = 125
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2822,11 +2811,11 @@ class Lexer:
                             state = 0
                 case 125: # 'while'
                     if char in self.parspace:
-                        state = 120
+                        state = 126
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2849,12 +2838,12 @@ class Lexer:
                     if char == 'r': 
                         state = 128
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2873,12 +2862,12 @@ class Lexer:
                     if char == 'd': 
                         state = 129
                         lexeme += char
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         if char in self.delimiden:
-                            state = 254
+                            state = 253
                             if char is not None:
                                 self.step_back()
                         else:
@@ -2898,8 +2887,8 @@ class Lexer:
                         state = 130
                         if char is not None:
                             self.step_back()
-                    elif char is not None and (char in self.alphabet or char in self.digit or char == '_'):
-                        state = 253
+                    elif char is not None and (char.isalpha() or char.isdigit() or char == '_'):
+                        state = 252
                         lexeme += char
                     else:
                         column -= 1
@@ -2928,11 +2917,9 @@ class Lexer:
                     elif char == '+':
                         state = 133
                         lexeme += char
-
                     elif char == '=':
                         state = 135
                         lexeme += char
-
                     else:
                         column -= 1
                         if char is None:
@@ -2947,7 +2934,7 @@ class Lexer:
 
                 case 132: # Finalize 'PLUS' token
                     column -= 2
-                    tokens.append((lexeme, "PLUS", line, column))
+                    tokens.append((lexeme, "+", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -2971,7 +2958,7 @@ class Lexer:
 
                 case 134: # Finalize 'INCREMENT' token
                     column -= 2
-                    tokens.append((lexeme, "INCREMENT", line, column))
+                    tokens.append((lexeme, "++", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -2995,7 +2982,7 @@ class Lexer:
 
                 case 136: # Finalize 'PLUS ASSIGN' token
                     column -= 2
-                    tokens.append((lexeme, "PLUS-ASSIGN", line, column))
+                    tokens.append((lexeme, "+=", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3026,7 +3013,7 @@ class Lexer:
 
                 case 138: # Finalize 'MINUS' token
                     column -= 2
-                    tokens.append((lexeme, "MINUS", line, column))
+                    tokens.append((lexeme, "-", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3050,7 +3037,7 @@ class Lexer:
 
                 case 140: # Finalize '--' token
                     column -= 2
-                    tokens.append((lexeme, "DECREMENT", line, column))
+                    tokens.append((lexeme, "--", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3074,7 +3061,7 @@ class Lexer:
 
                 case 142: # Finalize '-=' token
                     column -= 2
-                    tokens.append((lexeme, "MINUS-ASSIGN", line, column))
+                    tokens.append((lexeme, "-=", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3106,7 +3093,7 @@ class Lexer:
 
                 case 144: # Finalize '*' token
                     column -= 2
-                    tokens.append((lexeme, "MULTIPLY", line, column))
+                    tokens.append((lexeme, "*", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3130,13 +3117,13 @@ class Lexer:
 
                 case 146: # Finalize '*=' token
                     column -= 2
-                    tokens.append((lexeme, "MULTIP-ASSIGN", line, column))
+                    tokens.append((lexeme, "*=", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
                 case 147: # '**'
                     if char in self.delim4:
-                        state = 146
+                        state = 148
                         if char is not None:
                             self.step_back()
                     elif char == '=':
@@ -3156,13 +3143,13 @@ class Lexer:
 
                 case 148: #Finalize '**' token
                     column -= 2
-                    tokens.append((lexeme, "EXPONENTIAL", line, column))
+                    tokens.append((lexeme, "**", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
                 case 149: # '**='
                     if char in self.delim4:
-                        state = 146
+                        state = 150
                         if char is not None:
                             self.step_back()
                     else:
@@ -3178,7 +3165,7 @@ class Lexer:
                         state = 0
                 case 150: #Finalize '**=' token
                     column -= 2
-                    tokens.append((lexeme, "EXPONENTIAL-ASSIGN", line, column))
+                    tokens.append((lexeme, "**=", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3203,7 +3190,7 @@ class Lexer:
                         state = 0
                 case 152: # Finalize '/' token
                     column -= 2
-                    tokens.append((lexeme, "DIVISION", line, column))
+                    tokens.append((lexeme, "/", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3225,7 +3212,7 @@ class Lexer:
                         state = 0
                 case 154:# Finalize '/=' token
                     column -= 2
-                    tokens.append((lexeme, "DIVISION-ASSIGN", line, column))
+                    tokens.append((lexeme, "/=", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3251,7 +3238,7 @@ class Lexer:
                         state = 0
                 case 156: # Finalize '%' token
                     column -= 2
-                    tokens.append((lexeme, "MODULUS", line, column))
+                    tokens.append((lexeme, "%", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3273,7 +3260,7 @@ class Lexer:
                         state = 0
                 case 158:# Finalize '%=' token
                     column -= 2
-                    tokens.append((lexeme, "MODULUS-ASSIGN", line, column))
+                    tokens.append((lexeme, "%=", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3368,7 +3355,7 @@ class Lexer:
                         state = 0
                 case 166:# Finalize '<=' token
                     column -= 2
-                    tokens.append((lexeme, ">=", line, column))
+                    tokens.append((lexeme, "<=", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3397,7 +3384,7 @@ class Lexer:
                     if char is not None:
                         self.step_back()
                     state = 0
-                case 169:# >=
+                case 169:# !=
                     if char in self.delim7:
                         state = 170
                         if char is not None:
@@ -3533,7 +3520,7 @@ class Lexer:
                         state = 0
                 case 180:  # Finalize ':' token
                     column -= 2
-                    tokens.append((lexeme, "COLON", line, column))
+                    tokens.append((lexeme, ":", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3555,7 +3542,7 @@ class Lexer:
                         state = 0
                 case 182:  # Finalize ';' token
                     column -= 2
-                    tokens.append((lexeme, "SEMI-COLON", line, column))
+                    tokens.append((lexeme, ";", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
@@ -3731,7 +3718,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 199:# .
-                    if char in self.alphadigit:
+                    if char in self.alphabet:
                         state = 200
                         if char is not None:
                             self.step_back()
@@ -3756,6 +3743,12 @@ class Lexer:
                         state = 202
                         if char is not None:
                             self.step_back()
+                    elif char in self.asciicom:
+                        state = 254
+                        if char is not None:
+                            self.step_back()
+                    elif char == '*':
+                        state = 256
                     else:
                         column -= 1
                         if char is None:
@@ -3782,7 +3775,7 @@ class Lexer:
                         elif char == '.':
                             state = 224
                             lexeme += char
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         lexeme += char
                         self.errors.append(f"(Line {line}, Column {column}): Int Literal '{lexeme}' leading zero is not allowed.")
                         state = 0
@@ -3795,7 +3788,7 @@ class Lexer:
                             if char == '\n':
                                 column = 0
                         state = 0
-                case 204:# Finalize '!' token
+                case 204:# Finalize 'Int-Literal' token
                     column -= 2
                     tokens.append((lexeme, "Int-Literal", line, column))
                     if char is not None:
@@ -3804,6 +3797,12 @@ class Lexer:
                 case 205:
                     if char in self.digit and char != 0:
                         state = 206
+                        lexeme += char
+                    elif char == '0':
+                        state = 261
+                        lexeme += char
+                    elif char == '.':
+                        state = 224
                         lexeme += char
                     else:
                         column -= 1
@@ -3819,7 +3818,7 @@ class Lexer:
                         state = 207
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 208
                         lexeme += char
                     elif char == '.':
@@ -3845,7 +3844,7 @@ class Lexer:
                         state = 209
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 210
                         lexeme += char
                     elif char == '.':
@@ -3871,7 +3870,7 @@ class Lexer:
                         state = 211
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 212
                         lexeme += char
                     elif char == '.':
@@ -3897,7 +3896,7 @@ class Lexer:
                         state = 213
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 214
                         lexeme += char
                     elif char == '.':
@@ -3923,7 +3922,7 @@ class Lexer:
                         state = 215
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 216
                         lexeme += char
                     elif char == '.':
@@ -3949,7 +3948,7 @@ class Lexer:
                         state = 217
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 218
                         lexeme += char
                     elif char == '.':
@@ -3975,7 +3974,7 @@ class Lexer:
                         state = 219
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 220
                         lexeme += char
                     elif char == '.':
@@ -4001,7 +4000,7 @@ class Lexer:
                         state = 221
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         state = 222
                         lexeme += char
                     elif char == '.':
@@ -4027,10 +4026,13 @@ class Lexer:
                         state = 223
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         lexeme += char
-                        self.errors.append(f"(Line {line}, Column {column}): int literal '{lexeme}' exceeds 9 digit limit.'")
+                        self.errors.append(f"(at Line {line}, Column {column}): Int Literal '{lexeme}' exceeds 9 digit limit.'")
                         state = 0
+                    elif char == '.':
+                        state = 239
+                        lexeme += char
                     else:
                         column -= 1
                         if char is None:
@@ -4047,7 +4049,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 224:
-                    if char in self.digit:
+                    if char and char.isdigit():
                         state = 225
                         lexeme += char
                     else:
@@ -4064,7 +4066,7 @@ class Lexer:
                         state = 226
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 227
                         lexeme += char
                     else:
@@ -4087,7 +4089,7 @@ class Lexer:
                         state = 228
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 229
                         lexeme += char
                     else:
@@ -4110,7 +4112,7 @@ class Lexer:
                         state = 230
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 231
                         lexeme += char
                     else:
@@ -4133,7 +4135,7 @@ class Lexer:
                         state = 232
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 233
                         lexeme += char
                     else:
@@ -4156,7 +4158,7 @@ class Lexer:
                         state = 234
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 235
                         lexeme += char
                     else:
@@ -4179,7 +4181,7 @@ class Lexer:
                         state = 236
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 237
                         lexeme += char
                     else:
@@ -4202,7 +4204,7 @@ class Lexer:
                         state = 238
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 239
                         lexeme += char
                     else:
@@ -4225,7 +4227,7 @@ class Lexer:
                         state = 240
                         if char is not None:
                             self.step_back()
-                    elif char in self.digit:
+                    elif char and char.isdigit():
                         state = 241
                         lexeme += char
                     else:
@@ -4248,7 +4250,7 @@ class Lexer:
                         state = 242
                         if char is not None:
                             self.step_back()
-                    elif char and char in self.digit:
+                    elif char and char.isdigit():
                         lexeme += char
                         self.errors.append(f"(Line {line}, Column {column}): decimal '{lexeme}' exceeds 9 digit limit.'")
                         state = 0
@@ -4267,15 +4269,19 @@ class Lexer:
                     if char is not None:
                         self.step_back()
                     state = 0
-            #letter Literal:
+
+            #single Literal: 
                 case 243:
                     if char in self.asciisingle:
                         state = 244
                         lexeme += char
+                    elif char == '#':
+                        state = 262
+                        lexeme += char
                     else:
                         column -= 1
                         if char is None:
-                            self.errors.append(f"(at Line {line}, Column {column}):  '{lexeme}' Missing Delimiter.")
+                            self.errors.append(f"(at Line {line}, Column {column}): '{lexeme}' Missing Delimiter.")
                         else:
                             self.errors.append(f"(at Line {line}, Column {column}): Invalid Delimiter ( {repr(char)} ).")
                             if char == '\n':
@@ -4288,7 +4294,7 @@ class Lexer:
                         state = 245
                         lexeme += char
                     else:
-                        self.errors.append(f"(Line {line}, Column {column}): {lexeme} Expected (\').")
+                        self.errors.append(f"(Line {line}, Column {column}): {lexeme} Expected (').")
                         if char is not None:
                             self.step_back()
                         state = 0
@@ -4315,21 +4321,45 @@ class Lexer:
                         self.step_back()
                     state = 0   
                 case 247:
-                    if char 
-
-
-
-
-
-
-
-                # Identifier (State 251 - 255) first stage sa pag build
-                case 251:
-                    if char is not None and (char in self.alphabet or char in self.digit or char == '_'):
+                    if char in self.asciiword:
+                        state = 247
                         lexeme += char
-                        state = 253
-                    elif char in self.delimiden:
+                    elif char == '"':  # Empty string case
+                        state = 248
+                        lexeme += char
+                    else:
+                        self.errors.append(f"(at Line {line}, Column {column}): {lexeme} Expected character ( \" ).")
+                        if char is not None:
+                            self.step_back()
+                        state = 0
+                case 248:
+                    if char in self.delimword:
+                        state = 249
+                        if char is not None:
+                            self.step_back()
+                    else: 
+                        column -= 1
+                        if char is None:
+                            self.errors.append(f"(at Line {line}, Column {column}):  '{lexeme}' Missing Delimiter.")
+                        else:
+                            self.errors.append(f"(at Line {line}, Column {column}): Invalid Delimiter ( {repr(char)} ).")
+                            if char is not None:
+                                self.step_back()
+                        state = 0
+                case 249: 
+                    column -= 2
+                    tokens.append((lexeme, "Word-Literal", line, column))
+                    if char is not None:
+                        self.step_back()
+                    state = 0 
+
+                # Identifier (State 250 - 254) first stage sa pag build
+                case 250: 
+                    if char and (char.isalpha() or char.isdigit() or char == '_'):
+                        lexeme += char
                         state = 252
+                    elif char in self.delimiden:
+                        state = 251
                         if char is not None:
                             self.step_back()
                     else:
@@ -4343,20 +4373,20 @@ class Lexer:
                             if char is not None:
                                 self.step_back()
                         state = 0
-                case 252:
+                case 251:
                     column -= 2
                     tokens.append((lexeme, "identifier", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
-                case 253:
-                    if char is not None and (char in self.alphabet or char in self.digit or char == '_'):
+                case 252:
+                    if char and (char.isalpha() or char.isdigit() or char == '_'):
                         lexeme += char
-                    elif len(lexeme) > 25:  # Identifier limit
+                        if len(lexeme) > 25:  # Identifier limit
                             self.errors.append(f"(Line {line}, Column {column}): Identifier '{lexeme}' exceeds 25 characters.")
                             state = 0
                     elif char in self.delimiden:
-                        state = 254
+                        state = 253
                         if char is not None:
                             self.step_back()   
                     else:
@@ -4370,13 +4400,101 @@ class Lexer:
                             if char is not None:
                                 self.step_back()
                         state = 0
-                case 254:
+                case 253:
                     column -= 2
                     tokens.append((lexeme, "identifier", line, column))
                     if char is not None:
                         self.step_back()
                     state = 0
-
-
+             #comment
+                case 254:
+                    if char in self.ascii:
+                        state = 254
+                    elif char == '\n':
+                        line += 1
+                        state = 255
+                    else:
+                        if char is not None:
+                            self.step_back()
+                        state = 0
+                case 255:
+                    if char is not None:
+                        self.step_back()
+                    state = 0
+                case 256:
+                    if char in self.asciicom:
+                        state = 257
+                    elif char == '\n':
+                        line += 1
+                        state = 257
+                    elif char == '*':
+                        state = 282
+                    else:
+                        if char is not None:
+                            self.step_back()
+                        state = 0
+                case 257:
+                    if char in self.asciicom:
+                        state = 257
+                    elif char == '\n':
+                        line += 1
+                        state = 257
+                    elif char == '*' and self.peek() == '#':
+                        state = 258
+                    else:
+                        column -= 1
+                        state = 257
+                case 258:
+                    if char == '#':
+                        state = 259
+                    else:
+                        column -= 1
+                        if char is None:
+                            self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Missing Delimiter.")
+                        else:
+                            self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Invalid Delimiter ( {repr(char)} ).")
+                            if char == '\n':
+                                column = 0
+                        state = 0
+                case 259:
+                    if char == '\n':
+                        line += 1
+                        state = 260
+                    else:
+                        if char is not None:
+                            self.step_back()
+                        state = 0
+                case 260:
+                    if char is not None:
+                        self.step_back()
+                    state = 0
+            #Redundancy
+                case 261:
+                    if char == '.':
+                        state = 224
+                        lexeme += char
+                    elif char and char.isdigit():
+                        lexeme += char
+                        self.errors.append(f"(Line {line}, Column {column}): '{lexeme}' leading zero is not allowed.")
+                        state = 0
+                    else: 
+                        self.errors.append(f"(Line {line}, Column {column}): Negative zero can only be followed by a period.")
+                        state = 0
+                case 262:
+                    if char == '0':
+                        state = 244
+                        lexeme += char
+                    else:
+                        column -= 1
+                        if char is None:
+                            self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Missing Delimiter.")
+                        else:
+                            self.errors.append(f"(at Line {line}, Column {column}): Identifier '{lexeme}' Invalid Delimiter ( {repr(char)} ).")
+                            if char == '\n':
+                                column = 0
+                            if char is not None:
+                                self.step_back()
+                        state = 0             
+                        
         return tokens, self.errors
   

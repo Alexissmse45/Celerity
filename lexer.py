@@ -42,7 +42,7 @@ class Lexer:
         
         self.delimword = {')', '}', '+'} | self.comma | self.semicolon | self.space | self.colon
         self.delimsingle = {'}', ')'} | self.comma | self.semicolon | self.space | self.colon
-        self.delimdigit = {'}', ')', ']'} | self.space | self.delimop | self.semicolon | self.colon | self.comma | self.period
+        self.delimdigit = {'}', ')', ']'} | self.space | self.delimop | self.semicolon | self.colon | self.comma 
         self.delimiden = {'(', ')', '{', '}', '[', ']'} | self.space | self.delimop | self.semicolon | self.colon | self.comma | self.newln #kulang sa delimiden "{,[" nag add rin ng newln here.
         self.parspace = {'('} | self.space
         self.curspace = {'{', '}'} | self.space | self.newln

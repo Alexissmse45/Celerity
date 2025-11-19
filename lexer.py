@@ -42,7 +42,7 @@ class Lexer:
         
         self.delimword = {')', '}', '+'} | self.comma | self.semicolon | self.space | self.colon
         self.delimsingle = {'}', ')'} | self.comma | self.semicolon | self.space | self.colon
-        self.delimdigit = {'}', ')', ']'} | self.space | self.delimop | self.semicolon | self.colon | self.comma 
+        self.delimdigit = {'}', ')', ']'} | self.space | self.delimop | self.semicolon | self.colon | self.comma #remove period
         self.delimiden = {'(', ')', '{', '}', '[', ']'} | self.space | self.delimop | self.semicolon | self.colon | self.comma | self.newln #kulang sa delimiden "{,[" nag add rin ng newln here.
         self.parspace = {'('} | self.space
         self.curspace = {'{', '}'} | self.space | self.newln
@@ -3666,6 +3666,8 @@ class Lexer:
                                 column = 0
                             if char is not None:
                                 self.step_back()
+                        state = 0 #mag babato ng error if di ka nag lagay ng space after }
+                        
                 case 194:# Finalize '}' token
                     column -= 2
                     tokens.append((lexeme, "}", line, column))

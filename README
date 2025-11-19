@@ -1,0 +1,13 @@
+install mo muna 
+Python 3.10.11 (Windows x86-64 executable installer)
+
+git clone <github link>
+
+create kau venv
+py -3.10 -m venv venv310
+
+kahit wag na activate
+
+
+tas run na lang
+python celerity.py

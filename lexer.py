@@ -1454,7 +1454,7 @@ class Lexer:
                             state = 0
 
                 case 60:  # 'main'
-                    if char in self.parspace:
+                    if char is None or char in self.parspace:
                         state = 61
                         if char is not None:
                             self.step_back()
@@ -3776,7 +3776,7 @@ class Lexer:
 
             #int and decimal Literals
                 case 203:# zero
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 204
                         if char is not None:
                             self.step_back()
@@ -3803,7 +3803,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 205:
-                    if char in self.digit and char != 0:
+                    if char is None or char in self.digit and char != 0:
                         state = 206
                         lexeme += char
                     elif char == '0':
@@ -3822,7 +3822,7 @@ class Lexer:
                                 column = 0
                         state = 0
                 case 206:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 207
                         if char is not None:
                             self.step_back()
@@ -3848,7 +3848,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 208: 
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 209
                         if char is not None:
                             self.step_back()
@@ -3874,7 +3874,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 210: 
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 211
                         if char is not None:
                             self.step_back()
@@ -3900,7 +3900,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 212:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 213
                         if char is not None:
                             self.step_back()
@@ -3926,7 +3926,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 214: 
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 215
                         if char is not None:
                             self.step_back()
@@ -3952,7 +3952,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 216:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 217
                         if char is not None:
                             self.step_back()
@@ -3978,7 +3978,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 218:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 219
                         if char is not None:
                             self.step_back()
@@ -4004,7 +4004,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 220:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 221
                         if char is not None:
                             self.step_back()
@@ -4030,7 +4030,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 222:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 223
                         if char is not None:
                             self.step_back()
@@ -4057,7 +4057,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 224:
-                    if char and char.isdigit():
+                    if char is None or char and char.isdigit():
                         state = 225
                         lexeme += char
                     else:
@@ -4070,7 +4070,7 @@ class Lexer:
                                 column = 0
                         state = 0
                 case 225:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 226
                         if char is not None:
                             self.step_back()
@@ -4093,7 +4093,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 227:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 228
                         if char is not None:
                             self.step_back()
@@ -4116,7 +4116,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 229:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 230
                         if char is not None:
                             self.step_back()
@@ -4139,7 +4139,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 231:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 232
                         if char is not None:
                             self.step_back()
@@ -4162,7 +4162,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 233:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 234
                         if char is not None:
                             self.step_back()
@@ -4185,7 +4185,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 235:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 236
                         if char is not None:
                             self.step_back()
@@ -4208,7 +4208,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 237:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 238
                         if char is not None:
                             self.step_back()
@@ -4231,7 +4231,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 239:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 240
                         if char is not None:
                             self.step_back()
@@ -4254,7 +4254,7 @@ class Lexer:
                         self.step_back()
                     state = 0
                 case 241:
-                    if char in self.delimdigit:
+                    if char is None or char in self.delimdigit:
                         state = 242
                         if char is not None:
                             self.step_back()

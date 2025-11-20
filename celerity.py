@@ -30,15 +30,44 @@ class CelerityCompiler:
             'indent_line': '#404040'
         }
         
-        self.current_view = 'lexical'  # Track current output view
+        self.current_view = 'lexical'
         self.lexer = Lexer()
         self.tokens = []
         self.errors = []
         self.lexer_thread = None
         self.is_running = False
         
+        self.setup_scrollbar_style()
         self.create_widgets()
         self.insert_default_code()
+        
+    def setup_scrollbar_style(self):
+        """Configure modern scrollbar styling"""
+        style = ttk.Style()
+        style.theme_use('default')
+        
+        # Scrollbar styling - modern thin scrollbar
+        style.configure("Vertical.TScrollbar",
+                       background=self.colors['bg_light'],
+                       troughcolor=self.colors['bg_dark'],
+                       borderwidth=0,
+                       arrowsize=0,
+                       width=10)
+        
+        style.map("Vertical.TScrollbar",
+                 background=[('active', self.colors['text_gray']),
+                           ('!active', self.colors['bg_light'])])
+        
+        style.configure("Horizontal.TScrollbar",
+                       background=self.colors['bg_light'],
+                       troughcolor=self.colors['bg_dark'],
+                       borderwidth=0,
+                       arrowsize=0,
+                       width=10)
+        
+        style.map("Horizontal.TScrollbar",
+                 background=[('active', self.colors['text_gray']),
+                           ('!active', self.colors['bg_light'])])
         
     def create_widgets(self):
         # Header Frame
@@ -88,7 +117,7 @@ class CelerityCompiler:
         )
         editor_label.pack(side=tk.LEFT, padx=15, pady=8)
         
-        # Run Button with play icon
+        # Run Button
         self.run_button = tk.Button(
             editor_header,
             text="▶ Run",
@@ -142,14 +171,17 @@ class CelerityCompiler:
         )
         self.line_numbers.pack(side=tk.LEFT, fill=tk.Y)
         
-        # Code Text Area
+        # Code Text Area with custom scrollbar
+        code_frame = tk.Frame(editor_container, bg=self.colors['bg_dark'])
+        code_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
         self.code_text = tk.Text(
-            editor_container,
+            code_frame,
             font=("Consolas", 11),
             bg=self.colors['bg_light'],
             fg=self.colors['text_white'],
             insertbackground=self.colors['text_white'],
-            selectbackground='#3E3E42',  # Light grey selection
+            selectbackground='#3E3E42',
             selectforeground=self.colors['text_white'],
             relief=tk.FLAT,
             wrap=tk.NONE,
@@ -160,16 +192,15 @@ class CelerityCompiler:
         )
         self.code_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Scrollbars for code editor
-        code_scrollbar_y = ttk.Scrollbar(editor_container, command=self.code_text.yview)
-        code_scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
-        self.code_text.config(yscrollcommand=code_scrollbar_y.set)
+        # Vertical Scrollbar (only shows when needed)
+        self.code_scrollbar_y = ttk.Scrollbar(code_frame, command=self.code_text.yview, style="Vertical.TScrollbar")
+        self.code_text.config(yscrollcommand=self._update_code_scrollbar_y)
         
-        code_scrollbar_x = ttk.Scrollbar(left_panel, orient=tk.HORIZONTAL, command=self.code_text.xview)
-        code_scrollbar_x.pack(fill=tk.X)
-        self.code_text.config(xscrollcommand=code_scrollbar_x.set)
+        # Horizontal Scrollbar (only shows when needed)
+        self.code_scrollbar_x = ttk.Scrollbar(left_panel, orient=tk.HORIZONTAL, command=self.code_text.xview, style="Horizontal.TScrollbar")
+        self.code_text.config(xscrollcommand=self._update_code_scrollbar_x)
         
-        # Bind events for syntax highlighting, line numbers, and indent guides
+        # Bind events
         self.code_text.bind('<KeyRelease>', self.on_key_release)
         self.code_text.bind('<MouseWheel>', self.on_scroll)
         self.code_text.bind('<Tab>', self.handle_tab)
@@ -182,7 +213,7 @@ class CelerityCompiler:
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(5, 0))
         right_panel.pack_propagate(False)
         
-        # Output Header with buttons
+        # Output Header
         output_header = tk.Frame(right_panel, bg=self.colors['bg_medium'], height=40)
         output_header.pack(fill=tk.X)
         output_header.pack_propagate(False)
@@ -246,7 +277,7 @@ class CelerityCompiler:
         )
         self.output_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Bottom Panel (Errors/Terminal/Output)
+        # Bottom Panel
         bottom_panel = tk.Frame(self.root, bg=self.colors['bg_dark'], height=200)
         bottom_panel.pack(fill=tk.BOTH, side=tk.BOTTOM, padx=5, pady=(0, 5))
         bottom_panel.pack_propagate(False)
@@ -257,7 +288,6 @@ class CelerityCompiler:
         
         # Style for notebook
         style = ttk.Style()
-        style.theme_use('default')
         style.configure('TNotebook', background=self.colors['bg_medium'], borderwidth=0)
         style.configure('TNotebook.Tab', background=self.colors['bg_light'], 
                        foreground=self.colors['text_white'], padding=[20, 5])
@@ -296,7 +326,7 @@ class CelerityCompiler:
         )
         self.terminal_text.pack(fill=tk.BOTH, expand=True)
         
-        # Input field and submit button
+        # Input container
         input_container = tk.Frame(terminal_layout, bg=self.colors['bg_light'])
         input_container.pack(fill=tk.X, padx=5, pady=5)
         
@@ -349,6 +379,27 @@ class CelerityCompiler:
         self.code_text.tag_configure('string', foreground=self.colors['string_brown'])
         self.code_text.tag_configure('number', foreground=self.colors['number_blue'])
         self.code_text.tag_configure('indent_guide', foreground=self.colors['indent_line'])
+        
+        # Set higher priority for comment tag to override keywords
+        self.code_text.tag_raise('comment')
+    
+    def _update_code_scrollbar_y(self, first, last):
+        """Show/hide vertical scrollbar based on content"""
+        first, last = float(first), float(last)
+        if first <= 0.0 and last >= 1.0:
+            self.code_scrollbar_y.pack_forget()
+        else:
+            self.code_scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.code_scrollbar_y.set(first, last)
+    
+    def _update_code_scrollbar_x(self, first, last):
+        """Show/hide horizontal scrollbar based on content"""
+        first, last = float(first), float(last)
+        if first <= 0.0 and last >= 1.0:
+            self.code_scrollbar_x.pack_forget()
+        else:
+            self.code_scrollbar_x.pack(fill=tk.X)
+        self.code_scrollbar_x.set(first, last)
     
     def submit_input(self):
         """Handle user input submission"""
@@ -357,7 +408,6 @@ class CelerityCompiler:
             self.terminal_text.insert(tk.END, f"> {user_input}\n")
             self.terminal_text.see(tk.END)
             self.input_field.delete(0, tk.END)
-            # Process the input as needed for your compiler
     
     def handle_tab(self, event):
         """Handle Tab key press for 4-space indentation"""
@@ -373,10 +423,8 @@ class CelerityCompiler:
         line_num = int(cursor_pos.split('.')[0])
         current_line = self.code_text.get(f"{line_num}.0", f"{line_num}.end")
         
-        # Calculate current indentation
         indent = len(current_line) - len(current_line.lstrip())
         
-        # Check if line ends with opening bracket
         stripped_line = current_line.strip()
         if stripped_line.endswith('{') or stripped_line.endswith('(') or stripped_line.endswith('['):
             self.code_text.insert(tk.INSERT, "\n" + " " * (indent + 4))
@@ -389,12 +437,11 @@ class CelerityCompiler:
         return "break"
     
     def handle_backspace(self, event):
-        """Handle Backspace to delete 4 spaces at once if at indent position"""
+        """Handle Backspace to delete 4 spaces at once"""
         cursor_pos = self.code_text.index(tk.INSERT)
         line_num, col_num = map(int, cursor_pos.split('.'))
         
         if col_num >= 4:
-            # Check if the previous 4 characters are spaces
             prev_chars = self.code_text.get(f"{line_num}.{col_num-4}", f"{line_num}.{col_num}")
             if prev_chars == "    ":
                 self.code_text.delete(f"{line_num}.{col_num-4}", f"{line_num}.{col_num}")
@@ -422,7 +469,7 @@ class CelerityCompiler:
             self.highlight_syntax()
     
     def draw_indent_guides(self):
-        """Draw vertical indent guide lines like VS Code"""
+        """Draw vertical indent guide lines"""
         self.code_text.tag_remove('indent_guide', '1.0', tk.END)
         
         lines = self.code_text.get('1.0', tk.END).split('\n')
@@ -430,10 +477,8 @@ class CelerityCompiler:
             if not line.strip():
                 continue
             
-            # Count leading spaces
             leading_spaces = len(line) - len(line.lstrip())
             
-            # Draw a guide every 4 spaces
             for i in range(4, leading_spaces + 1, 4):
                 try:
                     self.code_text.tag_add('indent_guide', f"{line_num}.{i-1}", f"{line_num}.{i}")
@@ -473,61 +518,87 @@ class CelerityCompiler:
         self.line_numbers.config(state=tk.DISABLED)
         
     def highlight_syntax(self):
-        """Apply syntax highlighting to code editor"""
-        # Remove all tags
+        """Apply syntax highlighting with proper comment handling"""
+        # Remove all tags first
         for tag in ['comment', 'keyword', 'string', 'number']:
             self.code_text.tag_remove(tag, '1.0', tk.END)
         
         code = self.code_text.get('1.0', tk.END)
         
-        # Keywords based on your lexer
         keywords = ['bool', 'const', 'deci', 'def', 'do', 'else', 'elseif', 'false', 
                    'for', 'function', 'if', 'in', 'is', 'isnot', 'main', 'match', 
                    'num', 'out', 'pick', 'resume', 'return', 'single', 'split', 
                    'struct', 'true', 'vacant', 'while', 'word']
         
-        # Highlight comments (starting with #)
-        for match in re.finditer(r'#.*', code):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end()}c"
+        # Store comment regions to exclude from other highlighting
+        comment_regions = []
+        
+        # Highlight multi-line comments (#* ... *#) FIRST
+        # This pattern handles any number of # before * for the opening
+        for match in re.finditer(r'#+\*.*?\*#', code, re.DOTALL):
+            start_idx = match.start()
+            end_idx = match.end()
+            start = f"1.0+{start_idx}c"
+            end = f"1.0+{end_idx}c"
             self.code_text.tag_add('comment', start, end)
+            comment_regions.append((start_idx, end_idx))
         
-        # Highlight strings
+        # Highlight single-line comments (starting with # but not followed by *)
+        # Match # followed by anything except * at the start of comment
+        for match in re.finditer(r'#(?!\*)(?!\+\*)[^\n]*', code):
+            start_idx = match.start()
+            end_idx = match.end()
+            # Skip if inside multi-line comment
+            if not any(start <= start_idx < end for start, end in comment_regions):
+                start = f"1.0+{start_idx}c"
+                end = f"1.0+{end_idx}c"
+                self.code_text.tag_add('comment', start, end)
+                comment_regions.append((start_idx, end_idx))
+        
+        # Helper function to check if position is in comment
+        def is_in_comment(pos):
+            return any(start <= pos < end for start, end in comment_regions)
+        
+        # Highlight strings (only outside comments)
         for match in re.finditer(r'"[^"]*"', code):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end()}c"
-            self.code_text.tag_add('string', start, end)
+            if not is_in_comment(match.start()):
+                start = f"1.0+{match.start()}c"
+                end = f"1.0+{match.end()}c"
+                self.code_text.tag_add('string', start, end)
         
-        # Highlight single-quoted strings
         for match in re.finditer(r"'[^']*'", code):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end()}c"
-            self.code_text.tag_add('string', start, end)
+            if not is_in_comment(match.start()):
+                start = f"1.0+{match.start()}c"
+                end = f"1.0+{match.end()}c"
+                self.code_text.tag_add('string', start, end)
         
-        # Highlight numbers
+        # Highlight numbers (only outside comments)
         for match in re.finditer(r'\b\d+\.?\d*\b', code):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end()}c"
-            self.code_text.tag_add('number', start, end)
+            if not is_in_comment(match.start()):
+                start = f"1.0+{match.start()}c"
+                end = f"1.0+{match.end()}c"
+                self.code_text.tag_add('number', start, end)
         
-        # Highlight keywords
+        # Highlight keywords (only outside comments)
         for keyword in keywords:
             pattern = r'\b' + keyword + r'\b'
             for match in re.finditer(pattern, code):
-                start = f"1.0+{match.start()}c"
-                end = f"1.0+{match.end()}c"
-                self.code_text.tag_add('keyword', start, end)
+                if not is_in_comment(match.start()):
+                    start = f"1.0+{match.start()}c"
+                    end = f"1.0+{match.end()}c"
+                    self.code_text.tag_add('keyword', start, end)
+        
+        # Ensure comment tag has highest priority
+        self.code_text.tag_raise('comment')
     
     def switch_view(self, view):
         """Switch between different output views"""
         self.current_view = view
         
-        # Reset all button colors
         self.lexical_btn.config(bg=self.colors['bg_light'])
         self.syntax_btn.config(bg=self.colors['bg_light'])
         self.semantic_btn.config(bg=self.colors['bg_light'])
         
-        # Highlight selected button
         if view == 'lexical':
             self.lexical_btn.config(bg=self.colors['orange'])
             self.display_lexical_output()
@@ -539,29 +610,24 @@ class CelerityCompiler:
             self.display_semantic_output()
     
     def run_code(self):
-        """Run the lexical analysis in a separate thread"""
+        """Run the lexical analysis"""
         if self.is_running:
             messagebox.showwarning("Already Running", "Compilation is already in progress!")
             return
         
-        # Disable the run button and enable stop button
         self.is_running = True
         self.run_button.config(state=tk.DISABLED, text="⏳ Running...")
         self.stop_button.config(state=tk.NORMAL)
         
-        # Clear previous outputs
         self.output_text.delete('1.0', tk.END)
         self.error_text.delete('1.0', tk.END)
         self.terminal_text.delete('1.0', tk.END)
         
-        # Get current code from editor
         code = self.code_text.get('1.0', 'end-1c')
         
-        # Terminal output
         self.terminal_text.insert(tk.END, "Running Celerity Compiler...\n")
         self.terminal_text.insert(tk.END, "=" * 50 + "\n\n")
         
-        # Run lexer in a separate thread with timeout
         self.lexer_thread = threading.Thread(target=self._run_lexer, args=(code,), daemon=True)
         self.lexer_thread.start()
     
@@ -575,34 +641,21 @@ class CelerityCompiler:
         self.terminal_text.see(tk.END)
     
     def _run_lexer(self, code):
-        """Execute lexical analysis in background thread"""
+        """Execute lexical analysis"""
         try:
-            # Check if stop was requested
             if not self.is_running:
                 self.root.after(0, self._compilation_cancelled)
                 return
             
-            # Set a timeout for lexer execution (10 seconds)
-            import signal
-            
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Lexer execution timed out after 10 seconds")
-            
-            # Run lexical analysis with timeout protection
             tokens, errors = self.lexer.lexeme(code)
             
-            # Check again if stop was requested
             if not self.is_running:
                 self.root.after(0, self._compilation_cancelled)
                 return
             
-            # Update GUI from main thread
             self.root.after(0, self._update_results, tokens, errors)
             
-        except TimeoutError as e:
-            self.root.after(0, self._update_error, str(e))
         except Exception as e:
-            # Handle errors
             self.root.after(0, self._update_error, str(e))
     
     def _compilation_cancelled(self):
@@ -613,11 +666,10 @@ class CelerityCompiler:
         self.stop_button.config(state=tk.DISABLED)
     
     def _update_results(self, tokens, errors):
-        """Update GUI with lexical analysis results"""
+        """Update GUI with results"""
         self.tokens = tokens
         self.errors = errors
         
-        # Display based on current view
         if self.current_view == 'lexical':
             self.display_lexical_output()
         elif self.current_view == 'syntax':
@@ -625,7 +677,6 @@ class CelerityCompiler:
         elif self.current_view == 'semantic':
             self.display_semantic_output()
         
-        # Display errors
         if errors:
             self.error_text.insert(tk.END, "LEXICAL ERRORS:\n")
             self.error_text.insert(tk.END, "=" * 50 + "\n\n")
@@ -636,13 +687,12 @@ class CelerityCompiler:
             self.error_text.insert(tk.END, "✓ No errors found!\n")
             self.terminal_text.insert(tk.END, "\nCompilation successful!\n")
         
-        # Re-enable the run button and disable stop button
         self.is_running = False
         self.run_button.config(state=tk.NORMAL, text="▶ Run")
         self.stop_button.config(state=tk.DISABLED)
     
     def _update_error(self, error_msg):
-        """Display error message in GUI"""
+        """Display error message"""
         self.error_text.insert(tk.END, f"ERROR: {error_msg}\n")
         self.terminal_text.insert(tk.END, f"\nCompilation failed: {error_msg}\n")
         self.is_running = False
@@ -650,32 +700,25 @@ class CelerityCompiler:
         self.stop_button.config(state=tk.DISABLED)
     
     def display_lexical_output(self):
-        """Display lexical analysis tokens in table format"""
+        """Display lexical analysis tokens"""
         self.output_text.delete('1.0', tk.END)
         
         if self.tokens:
-            # Header
             self.output_text.insert(tk.END, "LEXICAL ANALYSIS - TOKENS\n")
             self.output_text.insert(tk.END, "=" * 64 + "\n\n")
             
-            # Table header
             header = f"{'Lexeme':<20} | {'Token':<20} | {'Line':<6} | {'Col':<6}\n"
             separator = "-" * 64 + "\n"
             
             self.output_text.insert(tk.END, header)
             self.output_text.insert(tk.END, separator)
             
-            # Table rows
             for token in self.tokens:
                 lexeme, token_type, line, column = token
-                
-                # Truncate long lexemes and add ellipsis
                 display_lexeme = lexeme if len(lexeme) <= 18 else lexeme[:15] + "..."
-                
                 row = f"{display_lexeme:<20} | {token_type:<20} | {line:<6} | {column:<6}\n"
                 self.output_text.insert(tk.END, row)
             
-            # Summary
             self.output_text.insert(tk.END, "\n" + separator)
             self.output_text.insert(tk.END, f"Total Tokens: {len(self.tokens)}\n")
         else:
@@ -697,7 +740,7 @@ class CelerityCompiler:
 
 
 def main():
-    """Main entry point for the application"""
+    """Main entry point"""
     root = tk.Tk()
     app = CelerityCompiler(root)
     root.mainloop()
@@ -705,29 +748,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -778,6 +798,8 @@ if __name__ == "__main__":
 #         self.lexer = Lexer()
 #         self.tokens = []
 #         self.errors = []
+#         self.lexer_thread = None
+#         self.is_running = False
         
 #         self.create_widgets()
 #         self.insert_default_code()
@@ -845,7 +867,25 @@ if __name__ == "__main__":
 #             pady=5,
 #             command=self.run_code
 #         )
-#         self.run_button.pack(side=tk.RIGHT, padx=15, pady=5)
+#         self.run_button.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
+        
+#         # Stop Button
+#         self.stop_button = tk.Button(
+#             editor_header,
+#             text="⏹ Stop",
+#             font=("Segoe UI", 10, "bold"),
+#             fg=self.colors['text_white'],
+#             bg="#C8675C",
+#             activebackground="#930000",
+#             activeforeground=self.colors['text_white'],
+#             relief=tk.FLAT,
+#             cursor="hand2",
+#             padx=20,
+#             pady=5,
+#             command=self.stop_code,
+#             state=tk.DISABLED
+#         )
+#         self.stop_button.pack(side=tk.RIGHT, padx=15, pady=5)
         
 #         # Code Editor Frame with line numbers
 #         editor_container = tk.Frame(left_panel, bg=self.colors['bg_dark'])
@@ -1169,7 +1209,8 @@ if __name__ == "__main__":
 #         default_code = """main() {
 #     #Write Code here:
 #     out("Welcome to Celerity Compiler");
-# }"""
+# }
+# """
 #         self.code_text.insert('1.0', default_code)
 #         self.update_line_numbers()
 #         self.highlight_syntax()
@@ -1263,8 +1304,14 @@ if __name__ == "__main__":
     
 #     def run_code(self):
 #         """Run the lexical analysis in a separate thread"""
-#         # Disable the run button to prevent multiple clicks
+#         if self.is_running:
+#             messagebox.showwarning("Already Running", "Compilation is already in progress!")
+#             return
+        
+#         # Disable the run button and enable stop button
+#         self.is_running = True
 #         self.run_button.config(state=tk.DISABLED, text="⏳ Running...")
+#         self.stop_button.config(state=tk.NORMAL)
         
 #         # Clear previous outputs
 #         self.output_text.delete('1.0', tk.END)
@@ -1278,22 +1325,56 @@ if __name__ == "__main__":
 #         self.terminal_text.insert(tk.END, "Running Celerity Compiler...\n")
 #         self.terminal_text.insert(tk.END, "=" * 50 + "\n\n")
         
-#         # Run lexer in a separate thread
-#         thread = threading.Thread(target=self._run_lexer, args=(code,), daemon=True)
-#         thread.start()
+#         # Run lexer in a separate thread with timeout
+#         self.lexer_thread = threading.Thread(target=self._run_lexer, args=(code,), daemon=True)
+#         self.lexer_thread.start()
+    
+#     def stop_code(self):
+#         """Stop the running compilation"""
+#         self.is_running = False
+#         self.stop_button.config(state=tk.DISABLED)
+#         self.run_button.config(state=tk.NORMAL, text="▶ Run")
+        
+#         self.terminal_text.insert(tk.END, "\n⏹ Compilation stopped by user.\n")
+#         self.terminal_text.see(tk.END)
     
 #     def _run_lexer(self, code):
 #         """Execute lexical analysis in background thread"""
 #         try:
-#             # Run lexical analysis
+#             # Check if stop was requested
+#             if not self.is_running:
+#                 self.root.after(0, self._compilation_cancelled)
+#                 return
+            
+#             # Set a timeout for lexer execution (10 seconds)
+#             import signal
+            
+#             def timeout_handler(signum, frame):
+#                 raise TimeoutError("Lexer execution timed out after 10 seconds")
+            
+#             # Run lexical analysis with timeout protection
 #             tokens, errors = self.lexer.lexeme(code)
+            
+#             # Check again if stop was requested
+#             if not self.is_running:
+#                 self.root.after(0, self._compilation_cancelled)
+#                 return
             
 #             # Update GUI from main thread
 #             self.root.after(0, self._update_results, tokens, errors)
             
+#         except TimeoutError as e:
+#             self.root.after(0, self._update_error, str(e))
 #         except Exception as e:
 #             # Handle errors
 #             self.root.after(0, self._update_error, str(e))
+    
+#     def _compilation_cancelled(self):
+#         """Handle cancelled compilation"""
+#         self.terminal_text.insert(tk.END, "Compilation cancelled.\n")
+#         self.is_running = False
+#         self.run_button.config(state=tk.NORMAL, text="▶ Run")
+#         self.stop_button.config(state=tk.DISABLED)
     
 #     def _update_results(self, tokens, errors):
 #         """Update GUI with lexical analysis results"""
@@ -1319,14 +1400,18 @@ if __name__ == "__main__":
 #             self.error_text.insert(tk.END, "✓ No errors found!\n")
 #             self.terminal_text.insert(tk.END, "\nCompilation successful!\n")
         
-#         # Re-enable the run button
+#         # Re-enable the run button and disable stop button
+#         self.is_running = False
 #         self.run_button.config(state=tk.NORMAL, text="▶ Run")
+#         self.stop_button.config(state=tk.DISABLED)
     
 #     def _update_error(self, error_msg):
 #         """Display error message in GUI"""
 #         self.error_text.insert(tk.END, f"ERROR: {error_msg}\n")
 #         self.terminal_text.insert(tk.END, f"\nCompilation failed: {error_msg}\n")
+#         self.is_running = False
 #         self.run_button.config(state=tk.NORMAL, text="▶ Run")
+#         self.stop_button.config(state=tk.DISABLED)
     
 #     def display_lexical_output(self):
 #         """Display lexical analysis tokens in table format"""
@@ -1335,11 +1420,11 @@ if __name__ == "__main__":
 #         if self.tokens:
 #             # Header
 #             self.output_text.insert(tk.END, "LEXICAL ANALYSIS - TOKENS\n")
-#             self.output_text.insert(tk.END, "=" * 50 + "\n\n")
+#             self.output_text.insert(tk.END, "=" * 64 + "\n\n")
             
 #             # Table header
 #             header = f"{'Lexeme':<20} | {'Token':<20} | {'Line':<6} | {'Col':<6}\n"
-#             separator = "-" * 70 + "\n"
+#             separator = "-" * 64 + "\n"
             
 #             self.output_text.insert(tk.END, header)
 #             self.output_text.insert(tk.END, separator)
@@ -1364,14 +1449,14 @@ if __name__ == "__main__":
 #         """Display syntax analysis results"""
 #         self.output_text.delete('1.0', tk.END)
 #         self.output_text.insert(tk.END, "SYNTAX ANALYSIS\n")
-#         self.output_text.insert(tk.END, "=" * 50 + "\n\n")
+#         self.output_text.insert(tk.END, "=" * 64 + "\n\n")
 #         self.output_text.insert(tk.END, "Coming soon...\n")
     
 #     def display_semantic_output(self):
 #         """Display semantic analysis results"""
 #         self.output_text.delete('1.0', tk.END)
 #         self.output_text.insert(tk.END, "SEMANTIC ANALYSIS\n")
-#         self.output_text.insert(tk.END, "=" * 50 + "\n\n")
+#         self.output_text.insert(tk.END, "=" * 64 + "\n\n")
 #         self.output_text.insert(tk.END, "Coming soon...\n")
 
 
@@ -1384,3 +1469,33 @@ if __name__ == "__main__":
 
 # if __name__ == "__main__":
 #     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,799 +1,591 @@
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
-from PIL import Image, ImageTk
-import re
-import threading
-from lexer import Lexer  # Import your lexer
+import sys
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QTextEdit, QVBoxLayout, QPushButton, QLabel,
+    QWidget, QTableWidget, QTableWidgetItem, QHeaderView, QSplitter, QPlainTextEdit,
+    QHBoxLayout, QGridLayout
+)
+from PyQt5.QtGui import QColor, QPainter, QFont, QTextFormat, QSyntaxHighlighter, QTextCharFormat, QTextCursor, QIcon, QPixmap
+from PyQt5.QtCore import Qt, QRect, QSize, QRegExp
+
+# Import your modules
+from lexer import Lexer
+import CFG
 
 
-class CelerityCompiler:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Celerity Compiler")
-        self.root.geometry("1400x900")
-        self.root.configure(bg="#1e1e1e")
+class SyntaxHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent):
+        super().__init__(parent.document())
+
+        # Define text styles
+        self.keyword_format = QTextCharFormat()
+        self.keyword_format.setForeground(QColor("#FF2222"))  # Red
+        self.keyword_format.setFontWeight(QFont.Bold)
+
+        self.datatype_format = QTextCharFormat()
+        self.datatype_format.setForeground(QColor("#4EC9B0"))  # Cyan
+
+        self.comment_format = QTextCharFormat()
+        self.comment_format.setForeground(QColor("#6A9955"))  # Green
+        self.comment_format.setFontItalic(True)
+
+        self.string_format = QTextCharFormat()
+        self.string_format.setForeground(QColor("#CE9178"))  # Orange
+
+        self.number_format = QTextCharFormat()
+        self.number_format.setForeground(QColor("#B5CEA8"))  # Light green
+
+        # Define patterns (based on your grammar)
+        keywords = ["if", "else", "elseif", "for", "while", "do", "function", 
+                   "return", "main", "vacant", "const", "struct", "match", 
+                   "pick", "def", "split", "in", "out", "is", "isnot",
+                   "true", "false"]
         
-        # Color palette from logo
-        self.colors = {
-            'bg_dark': '#1e1e1e',
-            'bg_medium': '#252526',
-            'bg_light': '#2d2d30',
-            'orange': '#FF6B35',
-            'pink': '#FF2E63',
-            'text_white': '#ffffff',
-            'text_gray': '#858585',
-            'comment_green': '#6A9955',
-            'keyword_orange': '#FF6B35',
-            'string_brown': '#CE9178',
-            'number_blue': '#B5CEA8',
-            'line_numbers': '#858585',
-            'indent_line': '#404040'
-        }
+        datatypes = ["num", "deci", "word", "single", "bool"]
         
-        self.current_view = 'lexical'
-        self.lexer = Lexer()
-        self.tokens = []
-        self.errors = []
-        self.lexer_thread = None
-        self.is_running = False
+        self.keyword_pattern = r"\b(" + "|".join(keywords) + r")\b"
+        self.datatype_pattern = r"\b(" + "|".join(datatypes) + r")\b"
+        self.number_pattern = r"\b\d+(\.\d+)?\b"
         
-        self.setup_scrollbar_style()
-        self.create_widgets()
-        self.insert_default_code()
+        # Comment patterns
+        self.comment_start = QRegExp(r"#\*")
+        self.comment_end = QRegExp(r"\*#")
+        self.single_comment = QRegExp(r"#[^*].*")
         
-    def setup_scrollbar_style(self):
-        """Configure modern scrollbar styling"""
-        style = ttk.Style()
-        style.theme_use('default')
+        # String patterns
+        self.double_quote_pattern = QRegExp(r'"[^"]*"')
+        self.single_quote_pattern = QRegExp(r"'[^']*'")
+
+    def highlightBlock(self, text):
+        # Track string positions to avoid highlighting keywords inside them
+        string_ranges = []
         
-        # Scrollbar styling - modern thin scrollbar
-        style.configure("Vertical.TScrollbar",
-                       background=self.colors['bg_light'],
-                       troughcolor=self.colors['bg_dark'],
-                       borderwidth=0,
-                       arrowsize=0,
-                       width=10)
+        # Handle multi-line comments first
+        self.setCurrentBlockState(0)
         
-        style.map("Vertical.TScrollbar",
-                 background=[('active', self.colors['text_gray']),
-                           ('!active', self.colors['bg_light'])])
+        start_index = 0
+        if self.previousBlockState() != 1:
+            start_index = self.comment_start.indexIn(text)
         
-        style.configure("Horizontal.TScrollbar",
-                       background=self.colors['bg_light'],
-                       troughcolor=self.colors['bg_dark'],
-                       borderwidth=0,
-                       arrowsize=0,
-                       width=10)
-        
-        style.map("Horizontal.TScrollbar",
-                 background=[('active', self.colors['text_gray']),
-                           ('!active', self.colors['bg_light'])])
-        
-    def create_widgets(self):
-        # Header Frame
-        header_frame = tk.Frame(self.root, bg=self.colors['bg_medium'], height=60)
-        header_frame.pack(fill=tk.X, side=tk.TOP)
-        header_frame.pack_propagate(False)
-        
-        # Logo placeholder
-        try:
-            logo_image = Image.open("icon/Celerity.png")
-            logo_image = logo_image.resize((45, 45), Image.Resampling.LANCZOS)
-            self.logo_photo = ImageTk.PhotoImage(logo_image)
-            logo_label = tk.Label(header_frame, image=self.logo_photo, bg=self.colors['bg_medium'])
-            logo_label.pack(side=tk.LEFT, padx=15, pady=7)
-        except Exception as e:
-            print(f"Logo not found: {e}")
-        
-        # Celerity Name
-        name_label = tk.Label(
-            header_frame, 
-            text="Celerity", 
-            font=("Segoe UI", 24, "bold"),
-            fg=self.colors['orange'],
-            bg=self.colors['bg_medium']
-        )
-        name_label.pack(side=tk.LEFT, padx=(15, 0), pady=7)
-        
-        # Main Container
-        main_container = tk.Frame(self.root, bg=self.colors['bg_dark'])
-        main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Left Panel (Code Editor)
-        left_panel = tk.Frame(main_container, bg=self.colors['bg_dark'])
-        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Code Editor Header
-        editor_header = tk.Frame(left_panel, bg=self.colors['bg_medium'], height=40)
-        editor_header.pack(fill=tk.X)
-        editor_header.pack_propagate(False)
-        
-        editor_label = tk.Label(
-            editor_header,
-            text="Code Editor",
-            font=("Segoe UI", 11, "bold"),
-            fg=self.colors['text_white'],
-            bg=self.colors['bg_medium']
-        )
-        editor_label.pack(side=tk.LEFT, padx=15, pady=8)
-        
-        # Run Button
-        self.run_button = tk.Button(
-            editor_header,
-            text="▶ Run",
-            font=("Segoe UI", 10, "bold"),
-            fg=self.colors['text_white'],
-            bg=self.colors['orange'],
-            activebackground=self.colors['pink'],
-            activeforeground=self.colors['text_white'],
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=20,
-            pady=5,
-            command=self.run_code
-        )
-        self.run_button.pack(side=tk.RIGHT, padx=(5, 0), pady=5)
-        
-        # Stop Button
-        self.stop_button = tk.Button(
-            editor_header,
-            text="⏹ Stop",
-            font=("Segoe UI", 10, "bold"),
-            fg=self.colors['text_white'],
-            bg="#C8675C",
-            activebackground="#930000",
-            activeforeground=self.colors['text_white'],
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=20,
-            pady=5,
-            command=self.stop_code,
-            state=tk.DISABLED
-        )
-        self.stop_button.pack(side=tk.RIGHT, padx=15, pady=5)
-        
-        # Code Editor Frame with line numbers
-        editor_container = tk.Frame(left_panel, bg=self.colors['bg_dark'])
-        editor_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Line Numbers
-        self.line_numbers = tk.Text(
-            editor_container,
-            width=4,
-            padx=5,
-            pady=10,
-            font=("Consolas", 11),
-            bg=self.colors['bg_medium'],
-            fg=self.colors['line_numbers'],
-            state=tk.DISABLED,
-            relief=tk.FLAT,
-            wrap=tk.NONE
-        )
-        self.line_numbers.pack(side=tk.LEFT, fill=tk.Y)
-        
-        # Code Text Area with custom scrollbar
-        code_frame = tk.Frame(editor_container, bg=self.colors['bg_dark'])
-        code_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        self.code_text = tk.Text(
-            code_frame,
-            font=("Consolas", 11),
-            bg=self.colors['bg_light'],
-            fg=self.colors['text_white'],
-            insertbackground=self.colors['text_white'],
-            selectbackground='#3E3E42',
-            selectforeground=self.colors['text_white'],
-            relief=tk.FLAT,
-            wrap=tk.NONE,
-            padx=10,
-            pady=10,
-            undo=True,
-            tabs=('1c', '2c', '3c', '4c')
-        )
-        self.code_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Vertical Scrollbar (only shows when needed)
-        self.code_scrollbar_y = ttk.Scrollbar(code_frame, command=self.code_text.yview, style="Vertical.TScrollbar")
-        self.code_text.config(yscrollcommand=self._update_code_scrollbar_y)
-        
-        # Horizontal Scrollbar (only shows when needed)
-        self.code_scrollbar_x = ttk.Scrollbar(left_panel, orient=tk.HORIZONTAL, command=self.code_text.xview, style="Horizontal.TScrollbar")
-        self.code_text.config(xscrollcommand=self._update_code_scrollbar_x)
-        
-        # Bind events
-        self.code_text.bind('<KeyRelease>', self.on_key_release)
-        self.code_text.bind('<MouseWheel>', self.on_scroll)
-        self.code_text.bind('<Tab>', self.handle_tab)
-        self.code_text.bind('<Return>', self.handle_return)
-        self.code_text.bind('<BackSpace>', self.handle_backspace)
-        self.code_text.bind('<Key>', self.handle_bracket_autocompletion)
-        
-        # Right Panel (Output)
-        right_panel = tk.Frame(main_container, bg=self.colors['bg_dark'], width=500)
-        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(5, 0))
-        right_panel.pack_propagate(False)
-        
-        # Output Header
-        output_header = tk.Frame(right_panel, bg=self.colors['bg_medium'], height=40)
-        output_header.pack(fill=tk.X)
-        output_header.pack_propagate(False)
-        
-        # View Buttons
-        self.lexical_btn = tk.Button(
-            output_header,
-            text="Lexical",
-            font=("Segoe UI", 9, "bold"),
-            fg=self.colors['text_white'],
-            bg=self.colors['orange'],
-            activebackground=self.colors['orange'],
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=15,
-            pady=3,
-            command=lambda: self.switch_view('lexical')
-        )
-        self.lexical_btn.pack(side=tk.LEFT, padx=(15, 3), pady=5)
-        
-        self.syntax_btn = tk.Button(
-            output_header,
-            text="Syntax",
-            font=("Segoe UI", 9, "bold"),
-            fg=self.colors['text_white'],
-            bg=self.colors['bg_light'],
-            activebackground=self.colors['orange'],
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=15,
-            pady=3,
-            command=lambda: self.switch_view('syntax')
-        )
-        self.syntax_btn.pack(side=tk.LEFT, padx=3, pady=5)
-        
-        self.semantic_btn = tk.Button(
-            output_header,
-            text="Semantic",
-            font=("Segoe UI", 9, "bold"),
-            fg=self.colors['text_white'],
-            bg=self.colors['bg_light'],
-            activebackground=self.colors['pink'],
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=15,
-            pady=3,
-            command=lambda: self.switch_view('semantic')
-        )
-        self.semantic_btn.pack(side=tk.LEFT, padx=3, pady=5)
-        
-        # Output Text Area
-        self.output_text = scrolledtext.ScrolledText(
-            right_panel,
-            font=("Consolas", 10),
-            bg=self.colors['bg_light'],
-            fg=self.colors['text_white'],
-            relief=tk.FLAT,
-            wrap=tk.WORD,
-            padx=10,
-            pady=10
-        )
-        self.output_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Bottom Panel
-        bottom_panel = tk.Frame(self.root, bg=self.colors['bg_dark'], height=200)
-        bottom_panel.pack(fill=tk.BOTH, side=tk.BOTTOM, padx=5, pady=(0, 5))
-        bottom_panel.pack_propagate(False)
-        
-        # Bottom Tabs
-        bottom_notebook = ttk.Notebook(bottom_panel)
-        bottom_notebook.pack(fill=tk.BOTH, expand=True)
-        
-        # Style for notebook
-        style = ttk.Style()
-        style.configure('TNotebook', background=self.colors['bg_medium'], borderwidth=0)
-        style.configure('TNotebook.Tab', background=self.colors['bg_light'], 
-                       foreground=self.colors['text_white'], padding=[20, 5])
-        style.map('TNotebook.Tab', background=[('selected', self.colors['bg_medium'])],
-                 foreground=[('selected', self.colors['orange'])])
-        
-        # Error Display Tab
-        error_frame = tk.Frame(bottom_notebook, bg=self.colors['bg_light'])
-        self.error_text = scrolledtext.ScrolledText(
-            error_frame,
-            font=("Consolas", 9),
-            bg=self.colors['bg_light'],
-            fg='#F48771',
-            relief=tk.FLAT,
-            wrap=tk.WORD,
-            padx=10,
-            pady=10
-        )
-        self.error_text.pack(fill=tk.BOTH, expand=True)
-        bottom_notebook.add(error_frame, text="Errors")
-        
-        # Terminal Tab
-        terminal_frame = tk.Frame(bottom_notebook, bg=self.colors['bg_light'])
-        terminal_layout = tk.Frame(terminal_frame, bg=self.colors['bg_light'])
-        terminal_layout.pack(fill=tk.BOTH, expand=True)
-        
-        self.terminal_text = scrolledtext.ScrolledText(
-            terminal_layout,
-            font=("Consolas", 9),
-            bg=self.colors['bg_light'],
-            fg=self.colors['text_white'],
-            relief=tk.FLAT,
-            wrap=tk.WORD,
-            padx=10,
-            pady=10
-        )
-        self.terminal_text.pack(fill=tk.BOTH, expand=True)
-        
-        # Input container
-        input_container = tk.Frame(terminal_layout, bg=self.colors['bg_light'])
-        input_container.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.input_field = tk.Entry(
-            input_container,
-            font=("Consolas", 10),
-            bg=self.colors['bg_medium'],
-            fg=self.colors['text_white'],
-            insertbackground=self.colors['text_white'],
-            relief=tk.FLAT
-        )
-        self.input_field.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        self.input_field.bind('<Return>', lambda e: self.submit_input())
-        
-        self.submit_button = tk.Button(
-            input_container,
-            text="Submit",
-            font=("Segoe UI", 9, "bold"),
-            fg=self.colors['text_white'],
-            bg=self.colors['orange'],
-            activebackground=self.colors['pink'],
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=15,
-            pady=3,
-            command=self.submit_input
-        )
-        self.submit_button.pack(side=tk.RIGHT)
-        
-        bottom_notebook.add(terminal_frame, text="Terminal")
-        
-        # Output Code Tab
-        output_code_frame = tk.Frame(bottom_notebook, bg=self.colors['bg_light'])
-        self.output_code_text = scrolledtext.ScrolledText(
-            output_code_frame,
-            font=("Consolas", 9),
-            bg=self.colors['bg_light'],
-            fg=self.colors['text_white'],
-            relief=tk.FLAT,
-            wrap=tk.WORD,
-            padx=10,
-            pady=10
-        )
-        self.output_code_text.pack(fill=tk.BOTH, expand=True)
-        bottom_notebook.add(output_code_frame, text="Generated Code")
-        
-        # Configure tags for syntax highlighting
-        self.code_text.tag_configure('comment', foreground=self.colors['comment_green'])
-        self.code_text.tag_configure('keyword', foreground=self.colors['keyword_orange'])
-        self.code_text.tag_configure('string', foreground=self.colors['string_brown'])
-        self.code_text.tag_configure('number', foreground=self.colors['number_blue'])
-        self.code_text.tag_configure('indent_guide', foreground=self.colors['indent_line'])
-        
-        # Set higher priority for comment tag to override keywords
-        self.code_text.tag_raise('comment')
-    
-    def _update_code_scrollbar_y(self, first, last):
-        """Show/hide vertical scrollbar based on content"""
-        first, last = float(first), float(last)
-        if first <= 0.0 and last >= 1.0:
-            self.code_scrollbar_y.pack_forget()
-        else:
-            self.code_scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
-        self.code_scrollbar_y.set(first, last)
-    
-    def _update_code_scrollbar_x(self, first, last):
-        """Show/hide horizontal scrollbar based on content"""
-        first, last = float(first), float(last)
-        if first <= 0.0 and last >= 1.0:
-            self.code_scrollbar_x.pack_forget()
-        else:
-            self.code_scrollbar_x.pack(fill=tk.X)
-        self.code_scrollbar_x.set(first, last)
-    
-    def submit_input(self):
-        """Handle user input submission"""
-        user_input = self.input_field.get()
-        if user_input:
-            self.terminal_text.insert(tk.END, f"> {user_input}\n")
-            self.terminal_text.see(tk.END)
-            self.input_field.delete(0, tk.END)
-    
-    def handle_tab(self, event):
-        """Handle Tab key press for 4-space indentation"""
-        self.code_text.insert(tk.INSERT, "    ")
-        self.update_line_numbers()
-        self.highlight_syntax()
-        self.draw_indent_guides()
-        return "break"
-    
-    def handle_return(self, event):
-        """Handle Return key press for auto-indentation"""
-        cursor_pos = self.code_text.index(tk.INSERT)
-        line_num = int(cursor_pos.split('.')[0])
-        current_line = self.code_text.get(f"{line_num}.0", f"{line_num}.end")
-        
-        indent = len(current_line) - len(current_line.lstrip())
-        
-        stripped_line = current_line.strip()
-        if stripped_line.endswith('{') or stripped_line.endswith('(') or stripped_line.endswith('['):
-            self.code_text.insert(tk.INSERT, "\n" + " " * (indent + 4))
-        else:
-            self.code_text.insert(tk.INSERT, "\n" + " " * indent)
-        
-        self.update_line_numbers()
-        self.highlight_syntax()
-        self.draw_indent_guides()
-        return "break"
-    
-    def handle_backspace(self, event):
-        """Handle Backspace to delete 4 spaces at once"""
-        cursor_pos = self.code_text.index(tk.INSERT)
-        line_num, col_num = map(int, cursor_pos.split('.'))
-        
-        if col_num >= 4:
-            prev_chars = self.code_text.get(f"{line_num}.{col_num-4}", f"{line_num}.{col_num}")
-            if prev_chars == "    ":
-                self.code_text.delete(f"{line_num}.{col_num-4}", f"{line_num}.{col_num}")
-                self.update_line_numbers()
-                self.highlight_syntax()
-                self.draw_indent_guides()
-                return "break"
-        return None
-    
-    def handle_bracket_autocompletion(self, event):
-        """Handle auto-completion of brackets"""
-        bracket_pairs = {
-            '(': ')',
-            '[': ']',
-            '{': '}',
-            '"': '"',
-            "'": "'"
-        }
-        
-        if event.char in bracket_pairs:
-            cursor_pos = self.code_text.index(tk.INSERT)
-            self.code_text.insert(cursor_pos, bracket_pairs[event.char])
-            self.code_text.mark_set(tk.INSERT, cursor_pos)
-            self.update_line_numbers()
-            self.highlight_syntax()
-    
-    def draw_indent_guides(self):
-        """Draw vertical indent guide lines"""
-        self.code_text.tag_remove('indent_guide', '1.0', tk.END)
-        
-        lines = self.code_text.get('1.0', tk.END).split('\n')
-        for line_num, line in enumerate(lines, 1):
-            if not line.strip():
-                continue
+        while start_index >= 0:
+            end_index = self.comment_end.indexIn(text, start_index)
             
-            leading_spaces = len(line) - len(line.lstrip())
+            if end_index == -1:
+                self.setCurrentBlockState(1)
+                comment_length = len(text) - start_index
+            else:
+                comment_length = end_index - start_index + self.comment_end.matchedLength()
             
-            for i in range(4, leading_spaces + 1, 4):
-                try:
-                    self.code_text.tag_add('indent_guide', f"{line_num}.{i-1}", f"{line_num}.{i}")
-                except:
-                    pass
+            self.setFormat(start_index, comment_length, self.comment_format)
+            start_index = self.comment_start.indexIn(text, start_index + comment_length)
         
-    def insert_default_code(self):
-        """Insert default template code"""
-        default_code = """main() {
-    #Write Code here:
-    out("Welcome to Celerity Compiler");
-}
-"""
-        self.code_text.insert('1.0', default_code)
-        self.update_line_numbers()
-        self.highlight_syntax()
-        self.draw_indent_guides()
-        
-    def on_key_release(self, event=None):
-        """Update UI elements on key release"""
-        self.update_line_numbers()
-        self.highlight_syntax()
-        self.draw_indent_guides()
-        
-    def on_scroll(self, event=None):
-        """Update line numbers on scroll"""
-        self.update_line_numbers()
-        
-    def update_line_numbers(self):
-        """Update line number display"""
-        line_count = self.code_text.get('1.0', 'end-1c').count('\n') + 1
-        line_numbers_string = "\n".join(str(i) for i in range(1, line_count + 1))
-        
-        self.line_numbers.config(state=tk.NORMAL)
-        self.line_numbers.delete('1.0', tk.END)
-        self.line_numbers.insert('1.0', line_numbers_string)
-        self.line_numbers.config(state=tk.DISABLED)
-        
-    def highlight_syntax(self):
-        """Apply syntax highlighting with proper comment handling"""
-        # Remove all tags first
-        for tag in ['comment', 'keyword', 'string', 'number']:
-            self.code_text.tag_remove(tag, '1.0', tk.END)
-        
-        code = self.code_text.get('1.0', tk.END)
-        
-        keywords = ['bool', 'const', 'deci', 'def', 'do', 'else', 'elseif', 'false', 
-                   'for', 'function', 'if', 'in', 'is', 'isnot', 'main', 'match', 
-                   'num', 'out', 'pick', 'resume', 'return', 'single', 'split', 
-                   'struct', 'true', 'vacant', 'while', 'word']
-        
-        # Store comment regions to exclude from other highlighting
-        comment_regions = []
-        
-        # Highlight multi-line comments (#* ... *#) FIRST
-        for match in re.finditer(r'#\*.*?\*#', code, re.DOTALL):
-            start_idx = match.start()
-            end_idx = match.end()
-            start = f"1.0+{start_idx}c"
-            end = f"1.0+{end_idx}c"
-            self.code_text.tag_add('comment', start, end)
-            comment_regions.append((start_idx, end_idx))
-        
-        # Highlight single-line comments (starting with #, but not #*)
-        for match in re.finditer(r'#(?!\*).*', code):
-            start_idx = match.start()
-            end_idx = match.end()
-            # Skip if inside multi-line comment
-            if not any(start <= start_idx < end for start, end in comment_regions):
-                start = f"1.0+{start_idx}c"
-                end = f"1.0+{end_idx}c"
-                self.code_text.tag_add('comment', start, end)
-                comment_regions.append((start_idx, end_idx))
-        
-        # Helper function to check if position is in comment
-        def is_in_comment(pos):
-            return any(start <= pos < end for start, end in comment_regions)
-        
-        # Highlight strings (only outside comments)
-        for match in re.finditer(r'"[^"]*"', code):
-            if not is_in_comment(match.start()):
-                start = f"1.0+{match.start()}c"
-                end = f"1.0+{match.end()}c"
-                self.code_text.tag_add('string', start, end)
-        
-        for match in re.finditer(r"'[^']*'", code):
-            if not is_in_comment(match.start()):
-                start = f"1.0+{match.start()}c"
-                end = f"1.0+{match.end()}c"
-                self.code_text.tag_add('string', start, end)
-        
-        # Highlight numbers (only outside comments)
-        for match in re.finditer(r'\b\d+\.?\d*\b', code):
-            if not is_in_comment(match.start()):
-                start = f"1.0+{match.start()}c"
-                end = f"1.0+{match.end()}c"
-                self.code_text.tag_add('number', start, end)
-        
-        # Highlight keywords (only outside comments)
-        for keyword in keywords:
-            pattern = r'\b' + keyword + r'\b'
-            for match in re.finditer(pattern, code):
-                if not is_in_comment(match.start()):
-                    start = f"1.0+{match.start()}c"
-                    end = f"1.0+{match.end()}c"
-                    self.code_text.tag_add('keyword', start, end)
-        
-        # Ensure comment tag has highest priority
-        self.code_text.tag_raise('comment')
-    
-    def get_comment_regions(self, code):
-        """Extract all comment regions from code as character index tuples"""
-        regions = []
-        
-        # Multi-line comments
-        for match in re.finditer(r'#\*.*?\*#', code, re.DOTALL):
-            regions.append((match.start(), match.end()))
-        
-        # Single-line comments
-        for match in re.finditer(r'#(?!\*).*', code):
-            start_idx = match.start()
-            # Check not in multi-line comment
-            if not any(s <= start_idx < e for s, e in regions):
-                regions.append((match.start(), match.end()))
-        
-        return regions
-    
-    def is_token_in_comment(self, token_info, code):
-        """Check if a token falls within any comment region"""
-        lexeme, token_type, line, column = token_info
-        
-        comment_regions = self.get_comment_regions(code)
-        
-        # Convert line/column to character index
-        lines = code.split('\n')
-        char_index = sum(len(lines[i]) + 1 for i in range(line - 1)) + column - 1
-        token_end = char_index + len(lexeme)
-        
-        # Check if token overlaps with any comment region
-        for start, end in comment_regions:
-            if not (token_end <= start or char_index >= end):
-                return True
-        
-        return False
-    
-    def switch_view(self, view):
-        """Switch between different output views"""
-        self.current_view = view
-        
-        self.lexical_btn.config(bg=self.colors['bg_light'])
-        self.syntax_btn.config(bg=self.colors['bg_light'])
-        self.semantic_btn.config(bg=self.colors['bg_light'])
-        
-        if view == 'lexical':
-            self.lexical_btn.config(bg=self.colors['orange'])
-            self.display_lexical_output()
-        elif view == 'syntax':
-            self.syntax_btn.config(bg=self.colors['orange'])
-            self.display_syntax_output()
-        elif view == 'semantic':
-            self.semantic_btn.config(bg=self.colors['pink'])
-            self.display_semantic_output()
-    
-    def clear_all_outputs(self):
-        """Clear all output areas before a new run"""
-        # Clear lexical/syntax/semantic output
-        self.output_text.delete('1.0', tk.END)
-        # Clear error display
-        self.error_text.delete('1.0', tk.END)
-        # Clear terminal
-        self.terminal_text.delete('1.0', tk.END)
-        # Clear generated code
-        self.output_code_text.delete('1.0', tk.END)
-        # Reset stored tokens and errors
-        self.tokens = []
-        self.errors = []
-    
-    def run_code(self):
-        """Run the lexical analysis"""
-        if self.is_running:
-            messagebox.showwarning("Already Running", "Compilation is already in progress!")
+        # Skip other highlighting if we're in a comment block
+        if self.currentBlockState() == 1:
             return
         
-        self.is_running = True
-        self.run_button.config(state=tk.DISABLED, text="⏳ Running...")
-        self.stop_button.config(state=tk.NORMAL)
+        # Single-line comments
+        comment_index = self.single_comment.indexIn(text)
+        if comment_index >= 0:
+            self.setFormat(comment_index, len(text) - comment_index, self.comment_format)
+            text_to_process = text[:comment_index]
+        else:
+            text_to_process = text
         
-        # Clear all outputs before new run
-        self.clear_all_outputs()
+        # Collect string positions FIRST (before other highlighting)
+        for pattern in [self.double_quote_pattern, self.single_quote_pattern]:
+            index = 0
+            while index >= 0:
+                index = pattern.indexIn(text_to_process, index)
+                if index >= 0:
+                    length = pattern.matchedLength()
+                    string_ranges.append((index, index + length))
+                    index += length
         
-        code = self.code_text.get('1.0', 'end-1c')
+        # Helper function to check if position is inside a string
+        def is_in_string(pos):
+            for start, end in string_ranges:
+                if start <= pos < end:
+                    return True
+            return False
         
-        self.terminal_text.insert(tk.END, "Running Celerity Compiler...\n")
-        self.terminal_text.insert(tk.END, "=" * 50 + "\n\n")
+        # Keywords (skip if inside strings)
+        keyword_regex = QRegExp(self.keyword_pattern)
+        index = 0
+        while index >= 0:
+            index = keyword_regex.indexIn(text_to_process, index)
+            if index >= 0:
+                length = keyword_regex.matchedLength()
+                if not is_in_string(index):
+                    self.setFormat(index, length, self.keyword_format)
+                index += length
         
-        self.lexer_thread = threading.Thread(target=self._run_lexer, args=(code,), daemon=True)
-        self.lexer_thread.start()
-    
-    def stop_code(self):
-        """Stop the running compilation"""
-        self.is_running = False
-        self.stop_button.config(state=tk.DISABLED)
-        self.run_button.config(state=tk.NORMAL, text="▶ Run")
+        # Data types (skip if inside strings)
+        datatype_regex = QRegExp(self.datatype_pattern)
+        index = 0
+        while index >= 0:
+            index = datatype_regex.indexIn(text_to_process, index)
+            if index >= 0:
+                length = datatype_regex.matchedLength()
+                if not is_in_string(index):
+                    self.setFormat(index, length, self.datatype_format)
+                index += length
         
-        self.terminal_text.insert(tk.END, "\n⏹ Compilation stopped by user.\n")
-        self.terminal_text.see(tk.END)
-    
-    def _run_lexer(self, code):
-        """Execute lexical analysis"""
-        try:
-            if not self.is_running:
-                self.root.after(0, self._compilation_cancelled)
-                return
-            
-            tokens, errors = self.lexer.lexeme(code)
-            
-            if not self.is_running:
-                self.root.after(0, self._compilation_cancelled)
-                return
-            
-            # Filter out tokens that are inside comments
-            filtered_tokens = [token for token in tokens if not self.is_token_in_comment(token, code)]
-            
-            self.root.after(0, self._update_results, filtered_tokens, errors)
-            
-        except Exception as e:
-            self.root.after(0, self._update_error, str(e))
-    
-    def _compilation_cancelled(self):
-        """Handle cancelled compilation"""
-        self.terminal_text.insert(tk.END, "Compilation cancelled.\n")
-        self.is_running = False
-        self.run_button.config(state=tk.NORMAL, text="▶ Run")
-        self.stop_button.config(state=tk.DISABLED)
-    
-    def _update_results(self, tokens, errors):
-        """Update GUI with results"""
-        self.tokens = tokens
-        self.errors = errors
+        # Numbers (skip if inside strings)
+        number_regex = QRegExp(self.number_pattern)
+        index = 0
+        while index >= 0:
+            index = number_regex.indexIn(text_to_process, index)
+            if index >= 0:
+                length = number_regex.matchedLength()
+                if not is_in_string(index):
+                    self.setFormat(index, length, self.number_format)
+                index += length
         
-        if self.current_view == 'lexical':
-            self.display_lexical_output()
-        elif self.current_view == 'syntax':
-            self.display_syntax_output()
-        elif self.current_view == 'semantic':
-            self.display_semantic_output()
+        # Apply string formatting LAST to override any previous formatting
+        for pattern in [self.double_quote_pattern, self.single_quote_pattern]:
+            index = 0
+            while index >= 0:
+                index = pattern.indexIn(text_to_process, index)
+                if index >= 0:
+                    length = pattern.matchedLength()
+                    self.setFormat(index, length, self.string_format)
+                    index += length
+
+
+class LineNumberArea(QWidget):
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
+        self.setStyleSheet("background: #D4C4B0; color: #666;")
+
+    def sizeHint(self):
+        return QSize(self.editor.line_number_area_width(), 0)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(event.rect(), QColor("#D4C4B0"))
+
+        block = self.editor.firstVisibleBlock()
+        block_number = block.blockNumber()
+        top = self.editor.blockBoundingGeometry(block).translated(self.editor.contentOffset()).top()
+        bottom = top + self.editor.blockBoundingRect(block).height()
+
+        while block.isValid() and top <= event.rect().bottom():
+            if block.isVisible() and bottom >= event.rect().top():
+                number = str(block_number + 1)
+                painter.setPen(QColor("#666"))
+                painter.setFont(QFont("Consolas", 9))
+                painter.drawText(0, int(top), self.width() - 5, 
+                               self.editor.fontMetrics().height(), 
+                               Qt.AlignRight, number)
+
+            block = block.next()
+            top = bottom
+            bottom = top + self.editor.blockBoundingRect(block).height()
+            block_number += 1
+
+
+class CodeEditor(QPlainTextEdit):
+    def __init__(self):
+        super().__init__()
+        self.setFont(QFont("Consolas", 10))
+        self.setStyleSheet("""
+            QPlainTextEdit {
+                background: #E8DCC8;
+                color: #333;
+                border: 2px solid #8B7355;
+                padding-left: 5px;
+            }
+        """)
+        
+        # Set tab stop width to 2 spaces worth of width
+        self.setTabStopDistance(self.fontMetrics().horizontalAdvance(' ') * 2)
+        
+        self.line_number_area = LineNumberArea(self)
+        self.blockCountChanged.connect(self.update_line_number_area_width)
+        self.updateRequest.connect(self.update_line_number_area)
+        self.update_line_number_area_width()
+        
+        self.highlighter = SyntaxHighlighter(self)
+
+    def line_number_area_width(self):
+        digits = len(str(max(1, self.blockCount())))
+        space = 10 + self.fontMetrics().horizontalAdvance('9') * digits
+        return space
+
+    def update_line_number_area_width(self):
+        self.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
+
+    def update_line_number_area(self, rect, dy):
+        if dy:
+            self.line_number_area.scroll(0, dy)
+        else:
+            self.line_number_area.update(0, rect.y(), 
+                                        self.line_number_area.width(), 
+                                        rect.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        cr = self.contentsRect()
+        self.line_number_area.setGeometry(QRect(cr.left(), cr.top(), 
+                                                self.line_number_area_width(), 
+                                                cr.height()))
+
+
+class CelerityCompiler(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.lexer = Lexer()
+        self.tokens = []
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Celerity Compiler")
+        self.setGeometry(100, 100, 1500, 850)
+        self.setStyleSheet("background-color: #DFC7A8;")
+
+        # Main widget
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(10)
+        main_widget.setLayout(main_layout)
+
+        # Header
+        header = self.create_header()
+        main_layout.addWidget(header)
+
+        # Content area with splitters
+        content_splitter = QSplitter(Qt.Horizontal)
+        
+        # Left side (Code Editor + Terminal)
+        left_widget = QWidget()
+        left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(8)
+        left_widget.setLayout(left_layout)
+
+        # Code Editor header with label and buttons
+        editor_header = QWidget()
+        editor_header.setStyleSheet("background: transparent;")
+        editor_header_layout = QHBoxLayout()
+        editor_header_layout.setContentsMargins(0, 0, 0, 5)
+        editor_header_layout.setSpacing(10)
+        editor_header.setLayout(editor_header_layout)
+        
+        editor_label = QLabel("Code Editor")
+        editor_label.setStyleSheet("""
+            color: #333;
+            font-weight: bold;
+            font-size: 12pt;
+            background: transparent;
+        """)
+        editor_header_layout.addWidget(editor_label)
+        editor_header_layout.addStretch()
+        
+        self.stop_btn = QPushButton("⬛ Stop")
+        self.run_btn = QPushButton("▶ Run")
+        
+        for btn in [self.stop_btn, self.run_btn]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #D2691E;
+                    color: white;
+                    border: 2px solid #A0522D;
+                    padding: 8px 25px;
+                    font-weight: bold;
+                    font-size: 10pt;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background: #CD853F;
+                }
+            """)
+        
+        self.run_btn.clicked.connect(self.run_code)
+        editor_header_layout.addWidget(self.stop_btn)
+        editor_header_layout.addWidget(self.run_btn)
+        
+        left_layout.addWidget(editor_header)
+
+        # Code editor
+        # ==============================
+        # CODE EDITOR WITH DEFAULT CODE
+        # ==============================
+        self.code_editor = CodeEditor()
+
+        # DEFAULT CODE APPEARS HERE
+        self.code_editor.setPlainText(
+            'main(){\n'
+            '      #Welcome To Celerity Compiler!\n'
+            '      out("Celerity is saying hi");\n'
+            '}\n'
+        )
+        left_layout.addWidget(self.code_editor, stretch=3)
+
+        # Terminal header with tabs
+        terminal_header = QWidget()
+        terminal_header.setStyleSheet("background: transparent;")
+        terminal_header_layout = QHBoxLayout()
+        terminal_header_layout.setContentsMargins(0, 5, 0, 0)
+        terminal_header_layout.setSpacing(5)
+        terminal_header.setLayout(terminal_header_layout)
+        
+        # Terminal tabs
+        self.terminal_btn = QPushButton("Terminal")
+        self.generate_code_btn = QPushButton("Generate Code")
+        
+        for btn in [self.terminal_btn, self.generate_code_btn]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #C8B5A0;
+                    color: #333;
+                    border: 2px solid #8B7355;  
+                    padding: 6px 20px;
+                    font-size: 9pt;
+                    border-radius: 5px;
+                    border-top-left-radius: 5px;
+                    border-top-right-radius: 5px;
+                }
+                QPushButton:hover {
+                    background: #D4C4B0;
+                }
+            """)
+        
+        terminal_header_layout.addWidget(self.terminal_btn)
+        terminal_header_layout.addWidget(self.generate_code_btn)
+        terminal_header_layout.addStretch()
+        left_layout.addWidget(terminal_header)
+
+        # Terminal
+        self.terminal = QTextEdit()
+        self.terminal.setReadOnly(True)
+        self.terminal.setStyleSheet("""
+            QTextEdit {
+                background: #E8DCC8;
+                color: #333;
+                border: 2px solid #8B7355;
+                font-family: Consolas;
+                font-size: 9pt;
+                padding: 8px;
+            }
+        """)
+        left_layout.addWidget(self.terminal, stretch=2)
+
+        content_splitter.addWidget(left_widget)
+
+        # Right side (Analysis results)
+        right_widget = QWidget()
+        right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(8)
+        right_widget.setLayout(right_layout)
+
+        # Analysis buttons
+        analysis_layout = QHBoxLayout()
+        analysis_layout.setSpacing(8)
+        analysis_layout.setContentsMargins(0, 0, 0, 5)
+        
+        self.lexical_btn = QPushButton("lexical")
+        self.syntax_btn = QPushButton("syntax")
+        self.semantic_btn = QPushButton("semantic")
+        
+        for btn in [self.lexical_btn, self.syntax_btn, self.semantic_btn]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #B8A890;
+                    color: #333;
+                    border: 2px solid #8B7355;
+                    padding: 8px 25px;
+                    border-radius: 5px;
+                    font-weight: normal;
+                    font-size: 10pt;
+                }
+                QPushButton:hover {
+                    background: #C8B5A0;
+                }
+            """)
+        
+        self.lexical_btn.clicked.connect(self.show_lexical_analysis)
+        self.syntax_btn.clicked.connect(self.show_syntax_analysis)
+        self.semantic_btn.clicked.connect(self.show_semantic_analysis)
+        
+        analysis_layout.addWidget(self.lexical_btn)
+        analysis_layout.addWidget(self.syntax_btn)
+        analysis_layout.addWidget(self.semantic_btn)
+        analysis_layout.addStretch()
+        right_layout.addLayout(analysis_layout)
+
+        # Results table
+        self.results_table = QTableWidget()
+        self.results_table.setStyleSheet("""
+            QTableWidget {
+                background: #E8DCC8;
+                border: 2px solid #8B7355;
+                gridline-color: #C8B5A0;
+            }
+            QHeaderView::section {
+                background: #C19A6B;
+                color: #333;
+                padding: 8px;
+                border: 1px solid #8B7355;
+                font-weight: bold;
+                font-size: 10pt;
+            }
+            QTableWidget::item {
+                padding: 5px;
+                color: #333;
+            }
+        """)
+        right_layout.addWidget(self.results_table)
+
+        content_splitter.addWidget(right_widget)
+        content_splitter.setStretchFactor(0, 2)
+        content_splitter.setStretchFactor(1, 1)
+
+        main_layout.addWidget(content_splitter)
+
+    def create_header(self):
+        header = QWidget()
+        header.setStyleSheet("""
+            background: #E8D4B8;
+            border: 2px solid #8B7355;
+            border-radius: 8px;
+        """)
+        header.setFixedHeight(120)
+
+        # Use absolute positioning instead of layouts
+        # Logo
+        logo_label = QLabel(header)
+        pixmap = QPixmap("icon/Celerity.png")
+        logo_label.setPixmap(pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo_label.setStyleSheet("""
+            color: #E63946;
+            font-size: 32pt;
+            font-weight: bold;
+            border: none;                     
+        """)
+        logo_label.move(20, 30)  # x, y position
+
+        # Title
+        title_label = QLabel("Celerity", header)
+        title_label.setStyleSheet("""
+            color: #E63946;
+            font-size: 28pt;
+            font-weight: bold;
+            font-family: Arial;
+            border: none;
+        """)
+        title_label.move(90, 35)  # position right next to logo
+
+        # Names on the right
+        names = ["Enriquez", "Habana", "Amper", "Tolin", "Gorme", "Valdez"]
+        for i, name in enumerate(names):
+            name_label = QLabel(name, header)
+            name_label.setStyleSheet("""
+                color: #333;
+                font-size: 11pt;
+                border: none;
+            """)
+            name_label.setAlignment(Qt.AlignCenter)
+            # position names on the right manually
+            name_label.move(1250 + (i % 2) * 60, 20 + (i // 2) * 30)
+
+        return header
+
+
+    def run_code(self):
+        # COMPLETE terminal refresh - removes all previous content
+        self.terminal.clear()
+        self.terminal.setPlainText("")  # Double clear for complete refresh
+        
+        self.terminal.append("<b>Running code...</b><br>")
+        
+        # Get code and run lexical analysis
+        code = self.code_editor.toPlainText()
+        self.tokens, errors = self.lexer.lexeme(code)
         
         if errors:
-            self.error_text.insert(tk.END, "LEXICAL ERRORS:\n")
-            self.error_text.insert(tk.END, "=" * 50 + "\n\n")
+            self.terminal.append("<span style='color: red;'><b>Lexical Errors:</b></span>")
             for error in errors:
-                self.error_text.insert(tk.END, f"❌ {error}\n")
-            self.terminal_text.insert(tk.END, f"\nCompilation failed with {len(errors)} error(s).\n")
+                self.terminal.append(f"<span style='color: red;'>{error}</span>")
         else:
-            self.error_text.insert(tk.END, "✓ No errors found!\n")
-            self.terminal_text.insert(tk.END, "\nCompilation successful!\n")
-        
-        self.is_running = False
-        self.run_button.config(state=tk.NORMAL, text="▶ Run")
-        self.stop_button.config(state=tk.DISABLED)
-    
-    def _update_error(self, error_msg):
-        """Display error message"""
-        self.error_text.insert(tk.END, f"ERROR: {error_msg}\n")
-        self.terminal_text.insert(tk.END, f"\nCompilation failed: {error_msg}\n")
-        self.is_running = False
-        self.run_button.config(state=tk.NORMAL, text="▶ Run")
-        self.stop_button.config(state=tk.DISABLED)
-    
-    def display_lexical_output(self):
-        """Display lexical analysis tokens"""
-        self.output_text.delete('1.0', tk.END)
-        
-        if self.tokens:
-            self.output_text.insert(tk.END, "LEXICAL ANALYSIS - TOKENS\n")
-            self.output_text.insert(tk.END, "=" * 64 + "\n\n")
+            self.terminal.append("<span style='color: green;'>✓ Lexical analysis passed</span>")
             
-            header = f"{'Lexeme':<20} | {'Token':<20} | {'Line':<6} | {'Col':<6}\n"
-            separator = "-" * 64 + "\n"
-            
-            self.output_text.insert(tk.END, header)
-            self.output_text.insert(tk.END, separator)
-            
-            for token in self.tokens:
-                lexeme, token_type, line, column = token
-                display_lexeme = lexeme if len(lexeme) <= 18 else lexeme[:15] + "..."
-                row = f"{display_lexeme:<20} | {token_type:<20} | {line:<6} | {column:<6}\n"
-                self.output_text.insert(tk.END, row)
-            
-            self.output_text.insert(tk.END, "\n" + separator)
-            self.output_text.insert(tk.END, f"Total Tokens: {len(self.tokens)}\n")
-        else:
-            self.output_text.insert(tk.END, "No tokens to display. Click 'Run' to analyze code.")
-    
-    def display_syntax_output(self):
-        """Display syntax analysis results"""
-        self.output_text.delete('1.0', tk.END)
-        self.output_text.insert(tk.END, "SYNTAX ANALYSIS\n")
-        self.output_text.insert(tk.END, "=" * 64 + "\n\n")
-        self.output_text.insert(tk.END, "Coming soon...\n")
-    
-    def display_semantic_output(self):
-        """Display semantic analysis results"""
-        self.output_text.delete('1.0', tk.END)
-        self.output_text.insert(tk.END, "SEMANTIC ANALYSIS\n")
-        self.output_text.insert(tk.END, "=" * 64 + "\n\n")
-        self.output_text.insert(tk.END, "Coming soon...\n")
+            # Run syntax analysis
+            try:
+                parser = CFG.LL1Parser(CFG.cfg, CFG.parse_table, CFG.follow_set)
+                success, parse_errors = parser.parse(self.tokens)
+                
+                if success:
+                    self.terminal.append("<span style='color: green;'>✓ Syntax analysis passed</span>")
+                else:
+                    self.terminal.append("<span style='color: red;'><b>Syntax Errors:</b></span>")
+                    for error in parse_errors:
+                        self.terminal.append(f"<span style='color: red;'>{error}</span>")
+            except Exception as e:
+                self.terminal.append(f"<span style='color: red;'>Syntax analysis error: {str(e)}</span>")
 
+    def show_lexical_analysis(self):
+        code = self.code_editor.toPlainText()
+        self.tokens, errors = self.lexer.lexeme(code)
+        
+        self.results_table.clear()
+        self.results_table.setColumnCount(4)
+        self.results_table.setHorizontalHeaderLabels(["Lexeme", "Token", "Line", "Column"])
+        self.results_table.setRowCount(len(self.tokens))
+        
+        for i, (lexeme, token, line, column) in enumerate(self.tokens):
+            self.results_table.setItem(i, 0, QTableWidgetItem(str(lexeme)))
+            self.results_table.setItem(i, 1, QTableWidgetItem(str(token)))
+            self.results_table.setItem(i, 2, QTableWidgetItem(str(line)))
+            self.results_table.setItem(i, 3, QTableWidgetItem(str(column)))
+        
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
-def main():
-    """Main entry point"""
-    root = tk.Tk()
-    app = CelerityCompiler(root)
-    root.mainloop()
+    def show_syntax_analysis(self):
+        if not self.tokens:
+            self.terminal.clear()
+            self.terminal.setPlainText("")
+            self.terminal.append("<span style='color: red;'>Please run lexical analysis first!</span>")
+            return
+        
+        self.results_table.clear()
+        self.results_table.setColumnCount(1)
+        self.results_table.setHorizontalHeaderLabels(["Syntax Analysis"])
+        
+        try:
+            parser = CFG.LL1Parser(CFG.cfg, CFG.parse_table, CFG.follow_set)
+            success, errors = parser.parse(self.tokens)
+            
+            if success:
+                self.results_table.setRowCount(1)
+                self.results_table.setItem(0, 0, QTableWidgetItem("✓ Syntax analysis passed - No errors found"))
+            else:
+                self.results_table.setRowCount(len(errors))
+                for i, error in enumerate(errors):
+                    self.results_table.setItem(i, 0, QTableWidgetItem(error))
+        except Exception as e:
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QTableWidgetItem(f"Error: {str(e)}"))
+        
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+    def show_semantic_analysis(self):
+        self.results_table.clear()
+        self.results_table.setColumnCount(1)
+        self.results_table.setHorizontalHeaderLabels(["Semantic Analysis"])
+        self.results_table.setRowCount(1)
+        
+        item = QTableWidgetItem("Coming soon...")
+        item.setForeground(QColor("#666"))
+        item.setFont(QFont("Arial", 12, QFont.Bold))
+        self.results_table.setItem(0, 0, item)
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
 
 if __name__ == "__main__":
-    main()
+    app = QApplication(sys.argv)
+    window = CelerityCompiler()
+    window.show()
+    sys.exit(app.exec_())

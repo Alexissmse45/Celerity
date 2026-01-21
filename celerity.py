@@ -180,7 +180,7 @@ class LineNumberArea(QWidget):
             if block.isVisible() and bottom >= event.rect().top():
                 number = str(block_number + 1)
                 painter.setPen(QColor("#666"))
-                painter.setFont(QFont("Consolas", 9))
+                painter.setFont(QFont("Consolas", 12))
                 painter.drawText(0, int(top), self.width() - 5, 
                                self.editor.fontMetrics().height(), 
                                Qt.AlignRight, number)
@@ -194,7 +194,7 @@ class LineNumberArea(QWidget):
 class CodeEditor(QPlainTextEdit):
     def __init__(self):
         super().__init__()
-        self.setFont(QFont("Consolas", 11))
+        self.setFont(QFont("Consolas", 14))
         self.setStyleSheet("""
             QPlainTextEdit {
                 background: #E8DCC8;
@@ -310,15 +310,13 @@ class CelerityCompiler(QMainWindow):
             """)
         
         self.run_btn.clicked.connect(self.run_code)
+        self.stop_btn.clicked.connect(self.stop_and_refresh)
         editor_header_layout.addWidget(self.stop_btn)
         editor_header_layout.addWidget(self.run_btn)
         
         left_layout.addWidget(editor_header)
 
         # Code editor
-        # ==============================
-        # CODE EDITOR WITH DEFAULT CODE
-        # ==============================
         self.code_editor = CodeEditor()
 
         # DEFAULT CODE APPEARS HERE
@@ -358,6 +356,10 @@ class CelerityCompiler(QMainWindow):
                 }
             """)
         
+        # Connect tab button clicks
+        self.terminal_btn.clicked.connect(self.show_terminal_view)
+        self.generate_code_btn.clicked.connect(self.show_generate_code_view)
+        
         terminal_header_layout.addWidget(self.terminal_btn)
         terminal_header_layout.addWidget(self.generate_code_btn)
         terminal_header_layout.addStretch()
@@ -377,6 +379,9 @@ class CelerityCompiler(QMainWindow):
             }
         """)
         left_layout.addWidget(self.terminal, stretch=2)
+        
+        # Track current view
+        self.current_terminal_view = "terminal"
 
         content_splitter.addWidget(left_widget)
 
@@ -455,14 +460,22 @@ class CelerityCompiler(QMainWindow):
         header = QWidget()
         header.setStyleSheet("""
             background: #E8D4B8;
-            border: 2px solid #8B7355;
-            border-radius: 8px;
+            border: none;
         """)
         header.setFixedHeight(120)
 
-        # Use absolute positioning instead of layouts
+        # Main layout for header
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(20, 30, 20, 30)
+        
+        # Left side - Logo and Title
+        left_side = QWidget()
+        left_layout = QHBoxLayout(left_side)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
+        
         # Logo
-        logo_label = QLabel(header)
+        logo_label = QLabel()
         pixmap = QPixmap("icon/Celerity.png")
         logo_label.setPixmap(pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         logo_label.setStyleSheet("""
@@ -471,10 +484,10 @@ class CelerityCompiler(QMainWindow):
             font-weight: bold;
             border: none;                     
         """)
-        logo_label.move(20, 30)  # x, y position
-
+        left_layout.addWidget(logo_label)
+        
         # Title
-        title_label = QLabel("Celerity", header)
+        title_label = QLabel("Celerity")
         title_label.setStyleSheet("""
             color: #E63946;
             font-size: 28pt;
@@ -482,10 +495,18 @@ class CelerityCompiler(QMainWindow):
             font-family: Arial;
             border: none;
         """)
-        title_label.move(90, 35)  # position right next to logo
-
+        left_layout.addWidget(title_label)
+        
+        header_layout.addWidget(left_side)
+        header_layout.addStretch()
+        
+        # Right side - Names in grid
+        names_widget = QWidget()
+        names_layout = QGridLayout(names_widget)
+        names_layout.setContentsMargins(0, 0, 0, 0)
+        names_layout.setSpacing(20)
         # Names on the right
-        names = ["Enriquez", "Habana", "Amper", "Tolin", "Gorme", "Valdez"]
+        names = ["Amper ", "Enriquez ", "Habana ", "Gorme ", "Tolin ", "Valdez "]
         for i, name in enumerate(names):
             name_label = QLabel(name, header)
             name_label.setStyleSheet("""
@@ -495,28 +516,61 @@ class CelerityCompiler(QMainWindow):
             """)
             name_label.setAlignment(Qt.AlignCenter)
             # position names on the right manually
-            name_label.move(1250 + (i % 2) * 150, 20 + (i // 2) * 30)
+            names_layout.addWidget(name_label, i // 3, i % 3)
+        
+        header_layout.addWidget(names_widget)
 
         return header
 
+    def refresh_all(self):
+        """Completely refresh terminal and results table"""
+        # Disable updates for better performance
+        self.terminal.setUpdatesEnabled(False)
+        self.results_table.setUpdatesEnabled(False)
+        
+        # Clear terminal completely
+        self.terminal.clear()
+        self.terminal.document().clear()
+        self.terminal.setHtml("")
+        
+        # Clear results table completely
+        self.results_table.clear()
+        self.results_table.setRowCount(0)
+        self.results_table.setColumnCount(0)
+        
+        # Reset tokens
+        self.tokens = []
+        
+        # Re-enable updates
+        self.terminal.setUpdatesEnabled(True)
+        self.results_table.setUpdatesEnabled(True)
+
+    def stop_and_refresh(self):
+        """Stop button - clears everything"""
+        self.refresh_all()
+        self.terminal.setHtml("<span style='color: #666;'>Terminal cleared. Click 'Run' to execute code.</span>")
 
     def run_code(self):
-        # COMPLETE terminal refresh - removes all previous content
-        self.terminal.clear()
-        self.terminal.setPlainText("")  # Double clear for complete refresh
+        # COMPLETE refresh first
+        self.refresh_all()
         
-        self.terminal.append("<b>Running code...</b><br>")
+        # Set view to terminal when running
+        self.current_terminal_view = "terminal"
+        
+        # Build output as list for efficiency
+        output = []
+        output.append("<b>Running code...</b><br>")
         
         # Get code and run lexical analysis
         code = self.code_editor.toPlainText()
         self.tokens, errors = self.lexer.lexeme(code)
         
         if errors:
-            self.terminal.append("<span style='color: red;'><b>Lexical Errors:</b></span>")
+            output.append("<span style='color: red;'><b>Lexical Errors:</b></span><br>")
             for error in errors:
-                self.terminal.append(f"<span style='color: red;'>{error}</span>")
+                output.append(f"<span style='color: red;'>{error}</span><br>")
         else:
-            self.terminal.append("<span style='color: green;'>✓ Lexical analysis passed</span>")
+            output.append("<span style='color: green;'>✓ Lexical analysis passed</span><br>")
             
             # Run syntax analysis
             try:
@@ -524,19 +578,50 @@ class CelerityCompiler(QMainWindow):
                 success, parse_errors = parser.parse(self.tokens)
                 
                 if success:
-                    self.terminal.append("<span style='color: green;'>✓ Syntax analysis passed</span>")
+                    output.append("<span style='color: green;'>✓ Syntax analysis passed</span><br>")
                 else:
-                    self.terminal.append("<span style='color: red;'><b>Syntax Errors:</b></span>")
+                    output.append("<span style='color: red;'><b>Syntax Errors:</b></span><br>")
                     for error in parse_errors:
-                        self.terminal.append(f"<span style='color: red;'>{error}</span>")
+                        output.append(f"<span style='color: red;'>{error}</span><br>")
             except Exception as e:
-                self.terminal.append(f"<span style='color: red;'>Syntax analysis error: {str(e)}</span>")
+                output.append(f"<span style='color: red;'>Syntax analysis error: {str(e)}</span><br>")
+        
+        # Display all output at once
+        self.terminal.setHtml("".join(output))
+    
+    def show_terminal_view(self):
+        """Switch to terminal view"""
+        self.current_terminal_view = "terminal"
+    
+    def show_generate_code_view(self):
+        """Switch to generate code view"""
+        self.current_terminal_view = "generate"
+        
+        # Clear and show generated code view
+        self.terminal.setUpdatesEnabled(False)
+        self.terminal.clear()
+        self.terminal.document().clear()
+        self.terminal.setHtml("")
+        self.terminal.setUpdatesEnabled(True)
+        
+        if self.tokens:
+            output = []
+            output.append("<b>Generated Code:</b><br>")
+            output.append("# Three-address code generation coming soon...")
+            self.terminal.setHtml("".join(output))
+        else:
+            self.terminal.setHtml("<span style='color: #666;'>Please run the code first to generate output.</span>")
 
     def show_lexical_analysis(self):
         code = self.code_editor.toPlainText()
         self.tokens, errors = self.lexer.lexeme(code)
         
+        # Complete table refresh
+        self.results_table.setUpdatesEnabled(False)
         self.results_table.clear()
+        self.results_table.setRowCount(0)
+        self.results_table.setColumnCount(0)
+        
         self.results_table.setColumnCount(4)
         self.results_table.setHorizontalHeaderLabels(["Lexeme", "Token", "Line", "Column"])
         self.results_table.setRowCount(len(self.tokens))
@@ -548,15 +633,20 @@ class CelerityCompiler(QMainWindow):
             self.results_table.setItem(i, 3, QTableWidgetItem(str(column)))
         
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.results_table.setUpdatesEnabled(True)
 
     def show_syntax_analysis(self):
         if not self.tokens:
             self.terminal.clear()
-            self.terminal.setPlainText("")
-            self.terminal.append("<span style='color: red;'>Please run lexical analysis first!</span>")
+            self.terminal.setHtml("<span style='color: red;'>Please run lexical analysis first!</span>")
             return
         
+        # Complete table refresh
+        self.results_table.setUpdatesEnabled(False)
         self.results_table.clear()
+        self.results_table.setRowCount(0)
+        self.results_table.setColumnCount(0)
+        
         self.results_table.setColumnCount(1)
         self.results_table.setHorizontalHeaderLabels(["Syntax Analysis"])
         
@@ -576,9 +666,15 @@ class CelerityCompiler(QMainWindow):
             self.results_table.setItem(0, 0, QTableWidgetItem(f"Error: {str(e)}"))
         
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.results_table.setUpdatesEnabled(True)
 
     def show_semantic_analysis(self):
+        # Complete table refresh
+        self.results_table.setUpdatesEnabled(False)
         self.results_table.clear()
+        self.results_table.setRowCount(0)
+        self.results_table.setColumnCount(0)
+        
         self.results_table.setColumnCount(1)
         self.results_table.setHorizontalHeaderLabels(["Semantic Analysis"])
         self.results_table.setRowCount(1)
@@ -588,6 +684,7 @@ class CelerityCompiler(QMainWindow):
         item.setFont(QFont("Arial", 12, QFont.Bold))
         self.results_table.setItem(0, 0, item)
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.results_table.setUpdatesEnabled(True)
 
 
 if __name__ == "__main__":

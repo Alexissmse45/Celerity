@@ -17,13 +17,13 @@ cfg = {
 
     "<literal>": [
         ["<number_literal>"],
-        ["word literal"],
-        ["single literal"],
+        ["Word-Literal"],
+        ["Single-Literal"],
         ["<bool_literal>"]],
 
     "<number_literal>": [
-        ["num literal"],
-        ["deci literal"]],
+        ["Num-Literal"],
+        ["Decimal-Literal"]],
 
     "<bool_literal>": [
         ["true"],
@@ -55,7 +55,7 @@ cfg = {
         ["λ"]],
 
     "<size>": [
-        ["num_literal"]],
+        ["Num-Literal"]],
 
     "<array_after>": [
         [";"],
@@ -120,7 +120,7 @@ cfg = {
 
 
     "<local_dec_after>": [
-        ["<data_type>", "identifier", "<decleration_after>"],
+        ["<data_type>", "identifier", "<declaration_after>"],
         ["const", "<data_type>", "identifier", "=", "<literal>", "<const_after>"],
         ["struct", "identifier", "<struct_after>"]],
 
@@ -242,7 +242,7 @@ cfg = {
         ["λ"]],
 
     "<else_statement>": [
-        ["else", "{", "<statement_list>", "}"],
+        ["else", "{", "<statement_set>", "}"],
         ["λ"]],
 
     "<match_statement>": [
@@ -262,7 +262,7 @@ cfg = {
 
     "<loop_statement>": [
         ["for", "(", "identifier", "<arithmetic_expression>", ";", "<condition>", ";", "identifier", "<incre_decre_op>", ")", "{", "<statement_set>", "}"],
-        ["while", "(", "<conditiion>", ")", "{", "<statement_set>", "}"],
+        ["while", "(", "<condition>", ")", "{", "<statement_set>", "}"],
         ["do", "{", "<statement_set>", "}", "while", "(", "<condition>", ")", ";"]],
 
     "<condition>": [
@@ -298,7 +298,7 @@ cfg = {
         ["λ"]],
 
     "<out_value>": [
-        ["word literal"],
+        ["Word-Literal"],
         ["identifier", "<value_iden_after>"]],
 
     "<return_statement>": [
